@@ -1,0 +1,91 @@
+---
+title: "Data Wrangling & EDA"
+output: html_notebook
+---
+
+
+```{r libraries warning=FALSE}
+#load needed libraries
+library(tidyverse)
+```
+```{r set_wd_load_data warning=FALSE cache=TRUE}
+#Setting wd and lodaing data
+#put the path of where you are storing the data on your computer
+paths=c('C:/Users/eliza/Documents/BANA 7047 - Data Mining II/Group Project/Data', 'path2', 'path3')
+#use the code Sys.info()[7] to find out how yoru name is stored on your local machine, copy to this list
+names(paths)=c('eliza', 'name2', 'name3')
+#this will set the wd
+setwd(paths[Sys.info()[7]])
+
+#load data sets
+households <- read_csv('5000_households.csv', col_types=cols(.default='f', HSHD_NUM='c'))
+transactions <- read_csv('5000_transactions.csv', col_types=cols(.default='?', STORE_R='f', YEAR='f'))
+products <- read_csv('5000_products.csv', col_types=cols(.default='f', PRODUCT_NUM='c'))
+
+#rename column 'X5' to be more descriptive
+products <- products %>% rename(ORGANIC = X5)
+
+#rename truncated date and store region column on transactions
+transactions <- transactions %>%
+  rename(DATE=PURCHASE_) %>%
+  rename(REGION = STORE_R)
+```
+```{r households_summary}
+summary(households, maxsum=20)
+```
+```{r products_summary}
+summary(products, maxsum = 30)
+```
+```{r products_summary}
+summary(transactions)
+```
+```{r}
+#I was curious how many transactions there are with negative spends - I think these might be returns & we may want to filter?
+returns <- transactions %>% 
+  filter(SPEND<0) %>%
+  group_by(BASKET_NUM) %>%
+  summarise(
+    ITEMS = n(),
+    TOTAL_RETURN = sum(SPEND),
+    TOTAL_UNITS = sum(UNITS)
+  )
+
+summary(returns)
+```
+
+```{r baskets cache=TRUE}
+#creating a data set with basket level detail - filter out negative spends
+baskets <- transactions %>%
+  filter(SPEND>0) %>%
+  group_by(BASKET_NUM) %>%
+  summarise(
+    ITEMS = n(),
+    TOTAL_SPEND = sum(SPEND),
+    TOTAL_UNITS = sum(UNITS)
+  )
+
+summary(baskets)
+```
+```{r create_trans_key cache=TRUE}
+#creating lookup table that links transactions to baskets & households
+trans_key <- transactions %>% 
+  filter(SPEND>0) %>%
+  select(BASKET_NUM, HSHD_NUM, DATE) %>%
+  distinct()
+```
+
+```{r}
+#confirming each basket only has one HSHD_NUM & DATE
+
+```
+
+
+```{r baskets_join_transkey cache=TRUE}
+baskets <- left_join(baskets, trans_key, by='BASKET_NUM')  
+
+summary(baskets)
+```
+```{r}
+count(baskets['BASKET_NUM'])
+```
+
