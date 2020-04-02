@@ -89,30 +89,23 @@ merged_df <- left_join(merged_df, households, by='HSHD_NUM')
 
 merged_df <- left_join(merged_df, baskets, by='BASKET_NUM')
 
+#To save time in the future saving out dataset
 save(merged_df, file='merged_df.Rdata')
 ```
 
+```{r organic}
+#sumarising the proportion of organic foods each household buys
+organic <- merged_df %>%
+  filter(DEPARTMENT=='FOOD')
+  group_by(HSHD_NUM.x) %>%
+  summarise(
+    TOTAL_UNITS = sum(UNITS),
+    ORGANIC = ifelse(ORGANIC=='Y', sum(UNITS),0)
+  )
 
-```{r create_trans_key cache=TRUE}
-#creating lookup table that links transactions to baskets & households
-trans_key <- transactions %>% 
-  filter(SPEND>0) %>%
-  select(BASKET_NUM, HSHD_NUM, DATE) %>%
-  distinct()
-```
-
-```{r}
-#confirming each basket only has one HSHD_NUM & DATE
-
-```
-
-
-```{r baskets_join_transkey cache=TRUE}
-baskets <- left_join(baskets, trans_key, by='BASKET_NUM')  
-
-summary(baskets)
+summary(organic)
 ```
 ```{r}
-count(baskets['BASKET_NUM'])
+colnames(merged_df)
 ```
 
