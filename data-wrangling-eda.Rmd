@@ -1,10 +1,14 @@
 ---
 title: "Data Wrangling & EDA"
 output: html_notebook
+<<<<<<< HEAD
 <<<<<<< Updated upstream
 =======
 test 2
 >>>>>>> Stashed changes
+=======
+test
+>>>>>>> 0bb77ecb58fde5a7c63580246c50f719ab0e2af8
 ---
 
 ```{r libraries warning=FALSE}
