@@ -12,6 +12,11 @@ test
 
 test 3
 ---
+Background Information and Objective
+
+The data set we are using for our project is called "The Complete Journey 2.0" and it is found on the 84.51 website. This data set has transactions at the household level from a group of 5,000 households over a two year period. This is a relational data set comprised of household data, transaction data, and product data that can be combined by household and product IDs. The household data has demographic information such as the size, income, and age of the household. The transaction data contains information like the amount of money spent and the number of items in a transaction. The product data contains information like the product category, whether a product is organic, and whether the product is a private or national brand. 
+
+For this project, we are acting as a team at 84.51 that is interested in identifying households and baskets that are likely to buy organic products so we know who to target for an organic product  marketing campaign. In order to do this, we will use data at both the household and basket level and try classification models to to accurately identify these households. We are also interested in organic trends over time and will use a classification model to attempt to flag households who have increased their spending on organic products in year two. 
 
 ```{r libraries warning=FALSE}
 #load needed libraries
@@ -61,6 +66,18 @@ returns <- transactions %>%
 
 summary(returns)
 ```
+The Data
+
+"The Complete Journey 2.0" is comprised of three relational data sets: households, transactions, and products. 
+
+The households data set has 5000 observations and 9 variables. A summary of each variable is shown below. HSHD_NUM is the unique identifier that linkns this data set to the transactions data set. Other variables include the age range, marital status, income range, number of children, household composition, household size, homeowner status, and whether the household is loyal to kroger or not. There are 866 records in this data set that have null values. 
+
+```{r hh summary, echo=TRUE}
+summary(households, maxsum=20)
+str(households)
+```
+
+
 
 ```{r baskets}
 #creating a data set with basket level detail - filter out negative spends
