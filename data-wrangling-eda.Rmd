@@ -1,51 +1,53 @@
 ---
 title: "Data Wrangling & EDA"
 output: html_notebook
-<<<<<<< HEAD
-<<<<<<< Updated upstream
-=======
-test 2
->>>>>>> Stashed changes
-=======
-test
->>>>>>> 0bb77ecb58fde5a7c63580246c50f719ab0e2af8
-
-test 3
 ---
 Background Information and Objective
 
 The data set we are using for our project is called "The Complete Journey 2.0" and it is found on the 84.51 website. This data set has transactions at the household level from a group of 5,000 households over a two year period. This is a relational data set comprised of household data, transaction data, and product data that can be combined by household and product IDs. The household data has demographic information such as the size, income, and age of the household. The transaction data contains information like the amount of money spent and the number of items in a transaction. The product data contains information like the product category, whether a product is organic, and whether the product is a private or national brand. 
 
-For this project, we are acting as a team at 84.51 that is interested in identifying households and baskets that are likely to buy organic products so we know who to target for an organic product  marketing campaign. In order to do this, we will use data at both the household and basket level and try classification models to to accurately identify these households. We are also interested in organic trends over time and will use a classification model to attempt to flag households who have increased their spending on organic products in year two. 
+For this project, we are acting as a team of analysts that is interested in identifying households and baskets that are likely to buy organic products so we know who to target for an organic product  marketing campaign. In order to do this, we will use data at both the household and basket level and try classification models to to accurately identify these households. We are also interested in organic trends over time and will use a classification model to attempt to flag households who have increased their spending on organic products in year two. 
 
-```{r libraries warning=FALSE}
+Understanding what drives customers to buy organic products is key as in many segments the market growth of organic products is outstripping that of the overall segment. Organic products also represent billions of dollars in sales and the availability of orgnic products is a key factor in why some consumers pick one grocery store over another. 
+
+A recent report from the Organic Trade Association stated that the U.S. market for organic products was \$52.2 billion and accounted for 5.7% of all food sales in the United States in 2018. They reported that the majority of organic food sales were fruits and vegetables, accounting for $17.4 billion in sales; dairy and eggs made up the second-largest organic food category at \$6.5 billion in sales. Sales of organic fruits and vegetables grew by 5.6% which far surpassed the growth of the overall fruit and vegetable market at 1.7%. Non-food organic products saw 10.6% overall growth from 2017 to 2018 also surpassing the growth of the overall non-food segment at 3.6%.
+
+(Citation 
+Redman, Russell. "Organic Products Hit a Record-Breaking High." Supermarket News (May 20, 2019). https://search-proquest-com.proxy.libraries.uc.edu/docview/2238503079?accountid=2909.)
+
+Recent polling by IRI, a consumer research company, found that 49% of Millennials and 40% of Gen X shoppers consider having a good selection of natural and organic foods important in selecting a grocery store. 
+
+Data is from the January 2020 IRI report titled "Consumer Connect Q4 2019: Channel Trends in CPG Today." 2,366 US internet users ages 18+ were surveyed online during December 2019.
+https://chart-na1.emarketer.com/234160/attributes-us-internet-users-find-important-store-selection-process-by-generation-dec-2019-of-respondents-each-group
+```{r libraries warning=FALSE, results="hide", echo = FALSE}
 #load needed libraries
 library(tidyverse)
+library(lazyeval)
 ```
 ```{r set_wd_load_data warning=FALSE}
 #Setting wd and lodaing data
 #put the path of where you are storing the data on your computer
-paths=c('C:/Users/eliza/Documents/BANA 7047 - Data Mining II/Group Project/Data', 'path2', 'path3')
+paths = c('C:/Users/eliza/Documents/BANA 7047 - Data Mining II/Group Project/Data', 'path2', 'path3')
 #use the code Sys.info()[7] to find out how yoru name is stored on your local machine, copy to this list
-names(paths)=c('eliza', 'name2', 'name3')
+names(paths) = c('eliza', 'name2', 'name3')
 #this will set the wd
 setwd(paths[Sys.info()[7]])
 
 #load data sets
-households <- read_csv('5000_households.csv', col_types=cols(.default='f', HSHD_NUM='c'))
-transactions <- read_csv('5000_transactions.csv', col_types=cols(.default='?', STORE_R='f', YEAR='f'))
-products <- read_csv('5000_products.csv', col_types=cols(.default='f', PRODUCT_NUM='c'))
+households <- read_csv('5000_households.csv', col_types = cols(.default = 'f', HSHD_NUM = 'c'), na = c("null", "", "NA"))
+transactions <- read_csv('5000_transactions.csv', col_types = cols(.default = '?', STORE_R = 'f', YEAR = 'f'), na = c("null", "", "NA"))
+products <- read_csv('5000_products.csv', col_types = cols(.default = 'f', PRODUCT_NUM = 'c'), na = c("null", "", "NA"))
 
 #rename column 'X5' to be more descriptive
 products <- products %>% rename(ORGANIC = X5)
 
 #rename truncated date and store region column on transactions
 transactions <- transactions %>%
-  rename(DATE=PURCHASE_) %>%
+  rename(DATE = PURCHASE_) %>%
   rename(REGION = STORE_R)
 ```
 ```{r households_summary}
-summary(households, maxsum=20)
+summary(households, maxsum = 20)
 ```
 ```{r products_summary}
 summary(products, maxsum = 30)
@@ -54,18 +56,17 @@ summary(products, maxsum = 30)
 summary(transactions)
 ```
 ```{r returns}
-#I was curious how many transactions there are with negative spends - I think these might be returns & we may want to filter?
+#There are some transactions with negative spends and negative units or units of 0, assuming that the negative spends and negative units are returns, unsure of the transactions with 0 units, but we are filtering these from the transactions table
 returns <- transactions %>% 
-  filter(SPEND<0) %>%
-  group_by(BASKET_NUM) %>%
-  summarise(
-    ITEMS = n(),
-    TOTAL_RETURN = sum(SPEND),
-    TOTAL_UNITS = sum(UNITS)
-  )
+  filter(UNITS < 1) #I am assuming the items with negative spends and positive units are items bought with a coupon that reduced the price below 0
 
-summary(returns)
+transactions <- anti_join(transactions, returns, by = c("BASKET_NUM", "PRODUCT_NUM"))
 ```
+```{r transactions_summary}
+summary(transactions)
+```
+
+
 The Data
 
 "The Complete Journey 2.0" is comprised of three relational data sets: households, transactions, and products. 
@@ -73,16 +74,15 @@ The Data
 The households data set has 5000 observations and 9 variables. A summary of each variable is shown below. HSHD_NUM is the unique identifier that linkns this data set to the transactions data set. Other variables include the age range, marital status, income range, number of children, household composition, household size, homeowner status, and whether the household is loyal to kroger or not. There are 866 records in this data set that have null values. 
 
 ```{r hh summary, echo=TRUE}
-summary(households, maxsum=20)
+summary(households, maxsum = 20)
 str(households)
 ```
 
 
 
 ```{r baskets}
-#creating a data set with basket level detail - filter out negative spends
+#creating a data set with basket level detail - filter out returns
 baskets <- transactions %>%
-  filter(SPEND>0) %>%
   group_by(HSHD_NUM, BASKET_NUM) %>%
   summarise(
     PRODUCTS = n(),
@@ -106,33 +106,39 @@ baskets %>%
   count(BASKET_NUM) %>% 
   filter(n > 1)
 ```
-```{r merged_dataset}
-merged_df <- transactions %>%
-  filter(SPEND>0) 
+```{r market_basket}
+market_basket <- products %>%
+  mutate(ORGANIC = str_replace(ORGANIC, "N", "NON-ORGANIC")) %>%
+  mutate(ORGANIC = str_replace(ORGANIC, "Y", "ORGANIC")) %>% 
+  mutate(PRODUCT_NAME = str_c(ORGANIC, COMMODITY, sep = " ")) %>%
+  select(PRODUCT_NUM, PRODUCT_NAME) %>%
+  mutate(INDICATOR = 1) %>%
+  right_join(transactions, by = "PRODUCT_NUM") %>%
+  select(BASKET_NUM, PRODUCT_NAME, INDICATOR) %>%
+  distinct() %>%
+  pivot_wider(names_from = PRODUCT_NAME, 
+              values_from = INDICATOR, 
+              values_fill = list(INDICATOR = 0))
 
-merged_df <- left_join(merged_df, products, by='PRODUCT_NUM') 
-
-merged_df <- left_join(merged_df, households, by='HSHD_NUM')
-
-merged_df <- left_join(merged_df, baskets, by='BASKET_NUM')
-
-#To save time in the future saving out dataset
-save(merged_df, file='merged_df.Rdata')
 ```
-
-```{r organic}
-#sumarising the proportion of organic foods each household buys
-organic <- merged_df %>%
-  filter(DEPARTMENT=='FOOD')
-  group_by(HSHD_NUM.x) %>%
+```{r organic households}
+organic_households <- products %>%
+  select(PRODUCT_NUM, ORGANIC) %>%
+  mutate(ORGANIC = str_replace(ORGANIC, "N", "NORG")) %>%
+  mutate(ORGANIC = str_replace(ORGANIC, "Y", "ORG")) %>% 
+  right_join(transactions, by = "PRODUCT_NUM") %>%
+  group_by(HSHD_NUM, ORGANIC) %>%
   summarise(
+    TOTAL_SPEND = sum(SPEND),
     TOTAL_UNITS = sum(UNITS),
-    ORGANIC = ifelse(ORGANIC=='Y', sum(UNITS),0)
-  )
-
-summary(organic)
+    UNIQUE_ITEMS = n_distinct(PRODUCT_NUM)) %>% 
+  ungroup() %>%
+  pivot_wider(names_from = ORGANIC, values_from = c(TOTAL_SPEND, TOTAL_UNITS, UNIQUE_ITEMS), values_fill = list(TOTAL_SPEND = 0, TOTAL_UNITS = 0, UNIQUE_ITEMS = 0)) %>%
+  left_join(households, by = "HSHD_NUM") %>%
+  mutate(ORG_HOUSE = ifelse(TOTAL_UNITS_ORG > 0, 1, 0))
 ```
 ```{r}
-colnames(merged_df)
+summary(organic_households)
 ```
+
 
