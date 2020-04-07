@@ -6,7 +6,7 @@ output: html_notebook
 #load needed libraries
 library(tidyverse)
 library(lubridate)
-library(gridExtra)
+library(gridExtra) # test
 ```
 ```{r set_wd_load_data, warning=FALSE, include=FALSE, message=FALSE}
 #Setting wd and loading data
