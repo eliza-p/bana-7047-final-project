@@ -68,7 +68,7 @@ returns <- transactions %>%
 
 transactions <- anti_join(transactions, returns, by = c("BASKET_NUM", "PRODUCT_NUM"))
 ```
-```{r hh_plots, echo=FALSE}
+```{r hh_plots, include=FALSE}
 income <- households %>%
   filter(is.na(INCOME_RANGE) == FALSE) %>%
   ggplot() +
@@ -120,14 +120,13 @@ marital <- households %>%
     labs(x = "", y = "", title = "Marital Status") +
     coord_flip()
 ```
-
-#Background Information and Objective
+# Background Information and Objective
 
 Understanding what drives customers to buy organic products is key as in many segments the market growth of organic products is outstripping that of the overall segment. Organic products also represent billions of dollars in sales and the availability of orgnic products is a key factor in why some consumers pick one grocery store over another.
 
 A recent report from the Organic Trade Association stated that the U.S. market for organic products was \$52.2 billion and accounted for 5.7% of all food sales in the United States in 2018. They reported that the majority of organic food sales were fruits and vegetables, accounting for $17.4 billion in sales; dairy and eggs made up the second-largest organic food category at \$6.5 billion in sales. Sales of organic fruits and vegetables grew by 5.6% which far surpassed the growth of the overall fruit and vegetable market at 1.7%. Non-food organic products saw 10.6% overall growth from 2017 to 2018 also surpassing the growth of the overall non-food segment at 3.6% (Redman). And recent polling by IRI, a consumer research company, found that 49% of Millennials and 40% of Gen X shoppers consider having a good selection of natural and organic foods important in selecting a grocery store (Emarketer). 
 
-For this project, we are acting as a team of analysts that is interested in identifying households and baskets that are likely to buy organic products so we know who to target for an organic product marketing campaign. In order to do this, we will use data at both the household and basket level and try classification models to to accurately identify these households. We are also interested in organic trends over time and will use a classification model to attempt to flag households who have increased their spending on organic products in year two.
+For this project, we are acting as a team of analysts that is interested in identifying households and baskets that are likely to buy organic products so we know who to target for an organic product marketing campaign. In order to do this, we will use data at both the household and basket level and try classification models to accurately identify these households. We are also interested in organic trends over time and will use a classification model to attempt to flag households who have increased their spending on organic products in year two.
 
 (Citations
 Redman, Russell. "Organic Products Hit a Record-Breaking High." Supermarket News (May 20, 2019). https://search-proquest-com.proxy.libraries.uc.edu/docview/2238503079?accountid=2909.)
@@ -169,16 +168,17 @@ Through data exploration, we found that 6,427 transactions had negative spend. W
 ## Market Basket
 
 ```{r}
-res <- lapply( mydf , function(x) rbind( mean = mean(x) ,
-                                  sd = sd(x) ,
-                                  median = median(x) ,
-                                  minimum = min(x) ,
-                                  maximum = max(x) ,
-                                  s.size = length(x) ) )
+#to use later
+#res <- lapply( mydf , function(x) rbind( mean = mean(x) ,
+ #                                 sd = sd(x) ,
+  #                                median = median(x) ,
+   #                               minimum = min(x) ,
+    #                              maximum = max(x) ,
+     #                             s.size = length(x) ) )
 ```
 
 
-```{r baskets}
+```{r baskets, include=FALSE}
 #creating a data set with basket level detail - filter out returns
 baskets <- transactions %>%
   group_by(HSHD_NUM, BASKET_NUM) %>%
@@ -190,7 +190,7 @@ baskets <- transactions %>%
 
 summary(baskets)
 ```
-```{r key_check}
+```{r key_check, include=FALSE}
 #confirming primary keys in each table are unique
 households %>% 
   count(HSHD_NUM) %>% 
@@ -204,7 +204,7 @@ baskets %>%
   count(BASKET_NUM) %>% 
   filter(n > 1)
 ```
-```{r market_basket}
+```{r market_basket, include=FALSE}
 market_basket <- products %>%
   mutate(ORGANIC = str_replace(ORGANIC, "N", "NON-ORGANIC")) %>%
   mutate(ORGANIC = str_replace(ORGANIC, "Y", "ORGANIC")) %>% 
@@ -219,7 +219,7 @@ market_basket <- products %>%
               values_fill = list(INDICATOR = 0))
 
 ```
-```{r organic households}
+```{r organic_households, include=FALSE}
 organic_households <- products %>%
   select(PRODUCT_NUM, ORGANIC) %>%
   mutate(ORGANIC = str_replace(ORGANIC, "N", "NORG")) %>%
@@ -233,10 +233,12 @@ organic_households <- products %>%
   ungroup() %>%
   pivot_wider(names_from = ORGANIC, values_from = c(TOTAL_SPEND, TOTAL_UNITS, UNIQUE_ITEMS), values_fill = list(TOTAL_SPEND = 0, TOTAL_UNITS = 0, UNIQUE_ITEMS = 0)) %>%
   left_join(households, by = "HSHD_NUM") %>%
-  mutate(ORG_HOUSE = ifelse(TOTAL_UNITS_ORG > 0, 1, 0))
+  mutate(ORG_HOUSE = ifelse(TOTAL_UNITS_ORG > 0, 1, 0)) %>%
+  mutate(CHILDREN = ifelse(HSHD_COMPOSITION %in% c("1 Adult", "2 Adults", "Single Male", "Single Female"), 0, CHILDREN)) %>%
+  filter(complete.cases(.) == TRUE)
 ```
 ```{r}
 summary(organic_households)
 ```
 
-##Proposed Work for the Rest of the Project
+## Proposed Work for the Rest of the Project
