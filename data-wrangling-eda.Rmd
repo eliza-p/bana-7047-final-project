@@ -2,39 +2,23 @@
 title: "Data Wrangling & EDA"
 output: html_notebook
 ---
-Background Information and Objective
-
-The data set we are using for our project is called "The Complete Journey 2.0" and it is found on the 84.51 website. This data set has transactions at the household level from a group of 5,000 households over a two year period. This is a relational data set comprised of household data, transaction data, and product data that can be combined by household and product IDs. The household data has demographic information such as the size, income, and age of the household. The transaction data contains information like the amount of money spent and the number of items in a transaction. The product data contains information like the product category, whether a product is organic, and whether the product is a private or national brand. 
-
-For this project, we are acting as a team of analysts that is interested in identifying households and baskets that are likely to buy organic products so we know who to target for an organic product  marketing campaign. In order to do this, we will use data at both the household and basket level and try classification models to to accurately identify these households. We are also interested in organic trends over time and will use a classification model to attempt to flag households who have increased their spending on organic products in year two. 
-
-Understanding what drives customers to buy organic products is key as in many segments the market growth of organic products is outstripping that of the overall segment. Organic products also represent billions of dollars in sales and the availability of orgnic products is a key factor in why some consumers pick one grocery store over another. 
-
-A recent report from the Organic Trade Association stated that the U.S. market for organic products was \$52.2 billion and accounted for 5.7% of all food sales in the United States in 2018. They reported that the majority of organic food sales were fruits and vegetables, accounting for $17.4 billion in sales; dairy and eggs made up the second-largest organic food category at \$6.5 billion in sales. Sales of organic fruits and vegetables grew by 5.6% which far surpassed the growth of the overall fruit and vegetable market at 1.7%. Non-food organic products saw 10.6% overall growth from 2017 to 2018 also surpassing the growth of the overall non-food segment at 3.6%.
-
-(Citation 
-Redman, Russell. "Organic Products Hit a Record-Breaking High." Supermarket News (May 20, 2019). https://search-proquest-com.proxy.libraries.uc.edu/docview/2238503079?accountid=2909.)
-
-Recent polling by IRI, a consumer research company, found that 49% of Millennials and 40% of Gen X shoppers consider having a good selection of natural and organic foods important in selecting a grocery store. 
-
-Data is from the January 2020 IRI report titled "Consumer Connect Q4 2019: Channel Trends in CPG Today." 2,366 US internet users ages 18+ were surveyed online during December 2019.
-https://chart-na1.emarketer.com/234160/attributes-us-internet-users-find-important-store-selection-process-by-generation-dec-2019-of-respondents-each-group
-```{r libraries warning=FALSE, results="hide", echo = FALSE}
+```{r libraries, warning=FALSE, include= FALSE}
 #load needed libraries
 library(tidyverse)
-library(lazyeval)
+library(lubridate)
+library(gridExtra)
 ```
-```{r set_wd_load_data warning=FALSE}
-#Setting wd and lodaing data
+```{r set_wd_load_data, warning=FALSE, include=FALSE, message=FALSE}
+#Setting wd and loading data
 #put the path of where you are storing the data on your computer
 paths = c('C:/Users/eliza/Documents/BANA 7047 - Data Mining II/Group Project/Data', 'path2', 'path3')
-#use the code Sys.info()[7] to find out how yoru name is stored on your local machine, copy to this list
+#use the code Sys.info()[7] to find out how your name is stored on your local machine, copy to this list
 names(paths) = c('eliza', 'name2', 'name3')
 #this will set the wd
 setwd(paths[Sys.info()[7]])
 
 #load data sets
-households <- read_csv('5000_households.csv', col_types = cols(.default = 'f', HSHD_NUM = 'c'), na = c("null", "", "NA"))
+households <- read_csv('5000_households.csv', col_types = cols(.default = 'f', HSHD_NUM = 'c'), na = c("null", "", "NA", "NOT AVAILABLE", "Unknown"))
 transactions <- read_csv('5000_transactions.csv', col_types = cols(.default = '?', STORE_R = 'f', YEAR = 'f'), na = c("null", "", "NA"))
 products <- read_csv('5000_products.csv', col_types = cols(.default = 'f', PRODUCT_NUM = 'c'), na = c("null", "", "NA"))
 
@@ -45,39 +29,146 @@ products <- products %>% rename(ORGANIC = X5)
 transactions <- transactions %>%
   rename(DATE = PURCHASE_) %>%
   rename(REGION = STORE_R)
-```
-```{r households_summary}
-summary(households, maxsum = 20)
-```
-```{r products_summary}
-summary(products, maxsum = 30)
-```
-```{r transactions_summary}
-summary(transactions)
-```
-```{r returns}
+
+#make 'DATE' column in transactions dataset into a date format
+transactions <- transactions %>%
+  mutate(DATE = dmy(DATE))
+
+#reorder factors on households dataset
+households <- households %>%
+  mutate(AGE_RANGE = fct_relevel(AGE_RANGE,
+                                  "19-24",
+                                  "25-34",
+                                  "35-44",
+                                  "45-54",
+                                  "55-64",
+                                  "65-74",
+                                  "75+")) %>%
+  mutate(INCOME_RANGE = fct_relevel(INCOME_RANGE,
+                                    "UNDER 35K",
+                                    "35-49K",
+                                    "50-74K",
+                                    "75-99K",
+                                    "100-150K",
+                                    "150K+")) %>%
+  mutate(HH_SIZE = fct_relevel(HH_SIZE,
+                               "1",
+                               "2",
+                               "3",
+                               "4",
+                               "5+")) %>%
+  mutate(CHILDREN = fct_relevel(CHILDREN,
+                                "1",
+                                "2",
+                                "3"))
+
 #There are some transactions with negative spends and negative units or units of 0, assuming that the negative spends and negative units are returns, unsure of the transactions with 0 units, but we are filtering these from the transactions table
 returns <- transactions %>% 
   filter(UNITS < 1) #I am assuming the items with negative spends and positive units are items bought with a coupon that reduced the price below 0
 
 transactions <- anti_join(transactions, returns, by = c("BASKET_NUM", "PRODUCT_NUM"))
 ```
-```{r transactions_summary}
-summary(transactions)
+```{r hh_plots, echo=FALSE}
+income <- households %>%
+  filter(is.na(INCOME_RANGE) == FALSE) %>%
+  ggplot() +
+    geom_bar(mapping = aes(x = INCOME_RANGE)) +
+    labs(x = "", y = "", title = "Household Income")
+
+age <- households %>%
+  filter(is.na(AGE_RANGE) == FALSE) %>%
+  ggplot() +
+    geom_bar(mapping = aes(x = AGE_RANGE)) +
+    labs(x = "", y = "", title = "Primary Shopper Age")
+
+size <- households %>%
+  filter(is.na(HH_SIZE) == FALSE) %>%
+  ggplot() +
+    geom_bar(mapping = aes(x = HH_SIZE)) +
+    labs(x = "", y = "", title = "Size of Household")
+
+comp <- households %>%
+  filter(is.na(HSHD_COMPOSITION) == FALSE) %>%
+  ggplot() +
+    geom_bar(mapping = aes(x = HSHD_COMPOSITION)) +
+    labs(x = "", y = "", title = "Household Composition")
+
+children <- households %>%
+  filter(is.na(CHILDREN) == FALSE) %>%
+  ggplot() +
+    geom_bar(mapping = aes(x = CHILDREN)) +
+    labs(x = "", y = "", title = "Number of Children")
+
+homeowner <- households %>%
+  filter(is.na(HOMEOWNER) == FALSE) %>%
+  ggplot() +
+    geom_bar(mapping = aes(x = HOMEOWNER)) +
+    labs(x = "", y = "", title = "Homeowner Status") +
+    coord_flip()
+
+loyalty <- households %>%
+  filter(is.na(L) == FALSE) %>%
+  ggplot() +
+    geom_bar(mapping = aes(x = L)) +
+    labs(x = "", y = "", title = "Loyalty Card Status") +
+    coord_flip()
+
+marital <- households %>%
+  filter(is.na(MARITAL) == FALSE) %>%
+  ggplot() +
+    geom_bar(mapping = aes(x = MARITAL)) +
+    labs(x = "", y = "", title = "Marital Status") +
+    coord_flip()
 ```
 
+#Background Information and Objective
 
-The Data
+Understanding what drives customers to buy organic products is key as in many segments the market growth of organic products is outstripping that of the overall segment. Organic products also represent billions of dollars in sales and the availability of orgnic products is a key factor in why some consumers pick one grocery store over another.
 
-"The Complete Journey 2.0" is comprised of three relational data sets: households, transactions, and products. 
+A recent report from the Organic Trade Association stated that the U.S. market for organic products was \$52.2 billion and accounted for 5.7% of all food sales in the United States in 2018. They reported that the majority of organic food sales were fruits and vegetables, accounting for $17.4 billion in sales; dairy and eggs made up the second-largest organic food category at \$6.5 billion in sales. Sales of organic fruits and vegetables grew by 5.6% which far surpassed the growth of the overall fruit and vegetable market at 1.7%. Non-food organic products saw 10.6% overall growth from 2017 to 2018 also surpassing the growth of the overall non-food segment at 3.6% (Redman). And recent polling by IRI, a consumer research company, found that 49% of Millennials and 40% of Gen X shoppers consider having a good selection of natural and organic foods important in selecting a grocery store (Emarketer). 
 
-The households data set has 5000 observations and 9 variables. A summary of each variable is shown below. HSHD_NUM is the unique identifier that linkns this data set to the transactions data set. Other variables include the age range, marital status, income range, number of children, household composition, household size, homeowner status, and whether the household is loyal to kroger or not. There are 866 records in this data set that have null values. 
+For this project, we are acting as a team of analysts that is interested in identifying households and baskets that are likely to buy organic products so we know who to target for an organic product marketing campaign. In order to do this, we will use data at both the household and basket level and try classification models to to accurately identify these households. We are also interested in organic trends over time and will use a classification model to attempt to flag households who have increased their spending on organic products in year two.
 
-```{r hh summary, echo=TRUE}
-summary(households, maxsum = 20)
-str(households)
+(Citations
+Redman, Russell. "Organic Products Hit a Record-Breaking High." Supermarket News (May 20, 2019). https://search-proquest-com.proxy.libraries.uc.edu/docview/2238503079?accountid=2909.)
+
+Emarketer - Data is from the January 2020 IRI report titled "Consumer Connect Q4 2019: Channel Trends in CPG Today." 2,366 US internet users ages 18+ were surveyed online during December 2019.
+https://chart-na1.emarketer.com/234160/attributes-us-internet-users-find-important-store-selection-process-by-generation-dec-2019-of-respondents-each-group
+
+# The Data
+
+The data set we are using for our project is called "The Complete Journey 2.0" and it is found on the 84.51 website. This data set has transactions at the household level from a group of 5,000 households over a two year period. This is a relational data set comprised of household data, transaction data, and product data that can be combined by household and product IDs. The household data has demographic information such as the size, income, and age of the household. The transaction data contains information like the amount of money spent and the number of items in a transaction. The product data contains information like the product category, whether a product is organic, and whether the product is a private or national brand. 
+
+## Household Data Set
+
+The households data set has 5000 observations, one for each household with a unique key for each household and 8 variables which give demographic data. The column 'HSHD_NUM' is a unique key that links this data set to the transactions data set. Demographic variables include age range, marital status, income range, number of children, household composition, household size, homeowner status, and whether the household has a store loyality card. Every household has a 'HSHD_NUM' key and information on if that household has a loyality card. Complete demographic data is available for  `r sum(complete.cases(households))` and partial demographic data is available for `r sum(rowSums(is.na(households[3:9]))<7 & rowSums(is.na(households[3:9]))>0)` households.
+```{r hh_grid_plots, echo=FALSE, fig.height=10, fig.width=9}
+grid.arrange(size, age, income, homeowner, marital, children, ncol = 2)
 ```
+```{r hh_loyalty_plot, echo=FALSE, fig.height=3, fig.width=5}
+loyalty
+```
+```{r hh_comp_plot, echo=FALSE, fig.height=4, fig.width=8}
+comp
+```
+## Products Data Set
 
+## Transactions Data Set
+
+# Feature Engineering
+
+## Household Purchasing of Organic Products
+
+## Market Basket
+
+```{r}
+res <- lapply( mydf , function(x) rbind( mean = mean(x) ,
+                                  sd = sd(x) ,
+                                  median = median(x) ,
+                                  minimum = min(x) ,
+                                  maximum = max(x) ,
+                                  s.size = length(x) ) )
+```
 
 
 ```{r baskets}
