@@ -11,9 +11,9 @@ library(gridExtra)
 ```{r set_wd_load_data, warning=FALSE, include=FALSE, message=FALSE}
 #Setting wd and loading data
 #put the path of where you are storing the data on your computer
-paths = c('C:/Users/eliza/Documents/BANA 7047 - Data Mining II/Group Project/Data', 'path2', 'path3')
+paths = c('C:/Users/eliza/Documents/BANA 7047 - Data Mining II/Group Project/Data', 'C:/Users/ashle/Downloads/8451_The_Complete_Journey_2_Master (1)/The_Complete_Journey_2_Master', 'path3')
 #use the code Sys.info()[7] to find out how your name is stored on your local machine, copy to this list
-names(paths) = c('eliza', 'name2', 'name3')
+names(paths) = c('eliza', 'ashle', 'name3')
 #this will set the wd
 setwd(paths[Sys.info()[7]])
 
@@ -142,6 +142,9 @@ The data set we are using for our project is called "The Complete Journey 2.0" a
 ## Household Data Set
 
 The households data set has 5000 observations, one for each household with a unique key for each household and 8 variables which give demographic data. The column 'HSHD_NUM' is a unique key that links this data set to the transactions data set. Demographic variables include age range, marital status, income range, number of children, household composition, household size, homeowner status, and whether the household has a store loyality card. Every household has a 'HSHD_NUM' key and information on if that household has a loyality card. Complete demographic data is available for  `r sum(complete.cases(households))` and partial demographic data is available for `r sum(rowSums(is.na(households[3:9]))<7 & rowSums(is.na(households[3:9]))>0)` households.
+
+The majority of households fall between the ages of 35 and 74 and the distribution of age appears to be fairly normal with the exception of the very low number of households in the 19-24 range. This could be due to the fact that many younger shoppers still use their parent's loyalty card, so their data could show up under their parent's age. The vast majority of households are owners as opposed to renters and the majority of households also have a loyalty card. Income is slightly skewed right with fewer households making above $75,000. Many households in the data set are also comprised of only two adults, or two adults with one child. 
+
 ```{r hh_grid_plots, echo=FALSE, fig.height=10, fig.width=9}
 grid.arrange(size, age, income, homeowner, marital, children, ncol = 2)
 ```
@@ -152,8 +155,12 @@ loyalty
 comp
 ```
 ## Products Data Set
+The products data set has 151,141 observations and 5 variables which give information about the product. Each product has a unique 'PRODUCT_NUM' that links it to the transaction data set. Information such as the product department (food, non-food, or pharmacy), whether the product is a private or national brand, whether the product is organic, and the commodity of the product can be found in this data set. Product commidity is the most detailed information given about a given product so while we cannot pinpoint specific brands in this data set, we can see which categories of products are being bought organic. 
 
 ## Transactions Data Set
+The transactions data set has 10,625,553 observations and 9 variables which give detailed information about every transaction over a two year period. Both the households and products data sets can be linked to the transaction set by the 'HSHD_NUM' and 'PRODUCT_NUM' keys. Information such as the date of purchase, the amount spent and number of units purchased, and store region can be found in this data set. 
+
+Through data exploration, we found that 6,427 transactions had negative spend. We are assuming that these records account for returns, so we chose to filter them out of the data set for the rest of our analysis. The transaction data set now contains 10,619,064 records. 
 
 # Feature Engineering
 
@@ -232,4 +239,4 @@ organic_households <- products %>%
 summary(organic_households)
 ```
 
-
+##Proposed Work for the Rest of the Project
