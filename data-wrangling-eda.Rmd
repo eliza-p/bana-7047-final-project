@@ -244,11 +244,28 @@ summary(organic_households)
 ## Proposed Work for the Rest of the Project
 
 ## Daily SPEND Prediction 
-```{r}
+```{r merge_df,include=FALSE}
 # merge data by "HSHD_NUM" and "PRODUCT_NUM"
 merge_df <- merge(transactions,products,by="PRODUCT_NUM")
 merge_df <- merge(merge_df,households,by="HSHD_NUM")
 str(merge_df)
+```
+```{r reset merge_df , include=FALSE}
+# set HSHD_NUM/PRODUCT_NUM /BASKET_NUM/YEAR to interger variable
+merge_df[sapply(merge_df, is.character)] <- lapply(merge_df[sapply(merge_df, is.character)],as.integer)
+merge_df$YEAR <- as.integer(merge_df$YEAR)
+str(merge_df)
+```
+
+
+```{r split organic data, include=FALSE}
+# filter Organic transactions and split by YEAR
+organic <- merge_df%>%filter(ORGANIC=="Y")
+organic_2016 <- organic%>%filter(YEAR=="2016")
+organic_2017 <- organic%>%filter(YEAR=="2017")
+
+# check "organic_2016" structure
+str(organic_2016)
 ```
 
 
