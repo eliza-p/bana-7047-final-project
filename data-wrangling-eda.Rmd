@@ -242,3 +242,13 @@ summary(organic_households)
 ```
 
 ## Proposed Work for the Rest of the Project
+
+## Daily SPEND Prediction 
+```{r}
+# merge data by "HSHD_NUM" and "PRODUCT_NUM"
+merge_df <- merge(transactions,products,by="PRODUCT_NUM")
+merge_df <- merge(merge_df,households,by="HSHD_NUM")
+str(merge_df)
+```
+
+
