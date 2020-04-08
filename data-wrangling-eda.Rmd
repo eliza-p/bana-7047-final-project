@@ -243,22 +243,20 @@ summary(organic_households)
 
 ## Proposed Work for the Rest of the Project
 
+
 ## Daily SPEND Prediction 
-```{r merge_df,include=FALSE}
+```{r}
 # merge data by "HSHD_NUM" and "PRODUCT_NUM"
 merge_df <- merge(transactions,products,by="PRODUCT_NUM")
 merge_df <- merge(merge_df,households,by="HSHD_NUM")
 str(merge_df)
 ```
-```{r reset merge_df , include=FALSE}
-# set HSHD_NUM/PRODUCT_NUM /BASKET_NUM/YEAR to interger variable
+```{r}
+# set HSHD_NUM/PRODUCT_NUM /BASKET_NUM to interger variable
 merge_df[sapply(merge_df, is.character)] <- lapply(merge_df[sapply(merge_df, is.character)],as.integer)
-merge_df$YEAR <- as.integer(merge_df$YEAR)
-str(merge_df)
 ```
 
-
-```{r split organic data, include=FALSE}
+```{r}
 # filter Organic transactions and split by YEAR
 organic <- merge_df%>%filter(ORGANIC=="Y")
 organic_2016 <- organic%>%filter(YEAR=="2016")
@@ -267,5 +265,108 @@ organic_2017 <- organic%>%filter(YEAR=="2017")
 # check "organic_2016" structure
 str(organic_2016)
 ```
+```{r}
+# check range of "organic_2016$WEEK_NUM"
+summary(organic_2016$WEEK_NUM)
+```
+```{r}
+# set "organic_2016$WEEK_NUM" as factor
+organic_2016$WEEK_NUM <- as.factor(organic_2016$WEEK_NUM)
+```
+
+```{r}
+# check range of "organic_2017$WEEK_NUM"
+summary(organic_2017$WEEK_NUM)
+```
+
+
+```{r}
+# set "organic_2017$WEEK_NUM" as factor
+organic_2017$WEEK_NUM <- as.factor(organic_2017$WEEK_NUM)
+
+# reset organic_2017$WEEK_NUM level as 1:52
+levels(organic_2017$WEEK_NUM) <- seq(1,52,1)
+levels(organic_2017$WEEK_NUM)
+```
+
+```{r}
+# aggregate data by "WEEK_NUM"
+organic_SPEND_week_2016 <- organic_2016%>%group_by(WEEK_NUM)%>%
+  summarise(SPEND_SUM_16=sum(SPEND),          # total spend(can be view as total revenue) for each week
+            SPEND_AVG_16=mean(SPEND),        # average spend(can be view as average revenue) for each week
+            TRAN_NUM_16=n())%>%
+  mutate(WEEK_NUM=as.integer(WEEK_NUM))
+
+organic_SPEND_week_2017 <- organic_2017%>%group_by(WEEK_NUM)%>%
+  summarise(SPEND_SUM_17=sum(SPEND),          # total spend(can be view as total revenue) for each week
+            SPEND_AVG_17=mean(SPEND),        # average spend(can be view as average revenue) for each week
+            TRAN_NUM_17=n())%>%
+  mutate(WEEK_NUM=as.integer(WEEK_NUM))
+
+organic_SPEND_week_2016
+organic_SPEND_week_2017
+```
+```{r}
+# bar chart Weekly Agregate SPEND each year
+library(ggplot2)
+ggplot(organic_SPEND_week_2016,aes(WEEK_NUM,SPEND_SUM_16))+geom_bar(stat = "identity")+
+  ggtitle("Organic Weekly Agregate SPEND - 2016")
+
+ggplot(organic_SPEND_week_2017,aes(WEEK_NUM,SPEND_SUM_17))+geom_bar(stat = "identity")+
+  ggtitle("Organic Weekly Agregate SPEND - 2017")
+```
+```{r}
+# combine Weekly Agregate SPEND in a data set
+organic_SPEND_week <- merge(organic_SPEND_week_2016,organic_SPEND_week_2017,by="WEEK_NUM")
+organic_SPEND_week
+```
+```{r}
+# Organic Weekly Agregate SPEND_SUM
+ggplot(organic_SPEND_week, aes(WEEK_NUM)) + 
+  geom_line(aes(y = SPEND_SUM_16, colour = "SPEND_SUM_16")) + 
+  geom_line(aes(y = SPEND_SUM_17, colour = "SPEND_SUM_17"))+
+  theme(legend.position="bottom")+
+  ggtitle("Organic Weekly Agregate SPEND_SUM")
+```
+```{r}
+# Organic Weekly Agregate SPEND_AVG
+ggplot(organic_SPEND_week, aes(WEEK_NUM)) + 
+  geom_line(aes(y = SPEND_AVG_16, colour = "SPEND_AVG_16")) + 
+  geom_line(aes(y = SPEND_AVG_17, colour = "SPEND_AVG_17"))+
+  theme(legend.position="bottom")+
+  ggtitle("Organic Weekly Agregate SPEND_AVG")
+```
+```{r}
+# aggregate data by "DATE"
+organic_SPEND_DATE <- organic%>%group_by(DATE)%>%
+  summarise(SPEND_SUM=sum(SPEND),          # daily total spend(can be view as total revenue)
+            SPEND_AVG=mean(SPEND),        # daily average spend(can be view as average revenue)
+            TRAN_NUM=n())
+  
+organic_SPEND_DATE
+```
+```{r}
+# plot daily spend 
+
+library(latticeExtra)
+
+# --> construct separate plots for each series
+obj1 <- xyplot(SPEND_SUM ~ DATE, organic_SPEND_DATE, type = "l" , lwd=2)
+obj2 <- xyplot(SPEND_AVG ~ DATE, organic_SPEND_DATE, type = "l", lwd=2)
+ 
+# --> Make the plot with second y axis AND legend:
+doubleYScale(obj1, obj2, text = c("SPEND_SUM_daily", "SPEND_AVG_daily") , add.ylab2 = TRUE)
+```
+# Idea from the SPEND Time Series Plots
+* From the Weekly SPEND Plots, we can see weekly Organic_SPEND_SUM increases in 2017 in general. However, Organic_SPEND_AVG in 2017 seems decreases in general.
+
+* We are curious about which elements drove the Organic_SPEND_SUM up in 2017 and curious about predicting future Organic Products revenue.
+  - To fit Linear Regression to training data. Use Stepwise and LASSO approach to do variable selection.
+  - To fit Random Forest, Boosting, GAM models into trainning data.
+  - Compare models and select the best model for predicting Organic Products Revenue and for identifing important varibles which can impact organic revenue significantly.
+  
+* We are also curious about which segmentation we should focus on.
+  - We are going to fit KNN, Clustering Methods, Logistic Regression, Random Forest, Boosting, GAM, NN into training date.
+  - Compare and selecte best model for identifying important customers for organic products selling.
 
 
