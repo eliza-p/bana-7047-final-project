@@ -62,6 +62,10 @@ households <- households %>%
                                 "2",
                                 "3"))
 
+#By default the households dataset encodes all households without children as having a 'CHILDREN' value of NA. This encodes these households with a CHILDREN value of 0 to avoid missing values.
+households <- households %>%
+  mutate(CHILDREN = ifelse(HSHD_COMPOSITION %in% c("1 Adult", "2 Adults", "Single Male", "Single Female"), 0, CHILDREN))
+
 #There are some transactions with negative spends and negative units or units of 0, assuming that the negative spends and negative units are returns, unsure of the transactions with 0 units, but we are filtering these from the transactions table
 returns <- transactions %>% 
   filter(UNITS < 1) #I am assuming the items with negative spends and positive units are items bought with a coupon that reduced the price below 0
@@ -69,52 +73,55 @@ returns <- transactions %>%
 transactions <- anti_join(transactions, returns, by = c("BASKET_NUM", "PRODUCT_NUM"))
 ```
 ```{r hh_plots, include=FALSE}
+#Since we are only working with complete cases for prediction, I re-did these graphs to show only complete cases
+
 income <- households %>%
-  filter(is.na(INCOME_RANGE) == FALSE) %>%
+  filter(complete.cases(.) == TRUE) %>%
+  mutate(INCOME_RANGE = fct_recode(INCOME_RANGE, "<35K" = "UNDER 35K")) %>%
   ggplot() +
     geom_bar(mapping = aes(x = INCOME_RANGE)) +
     labs(x = "", y = "", title = "Household Income")
 
 age <- households %>%
-  filter(is.na(AGE_RANGE) == FALSE) %>%
+  filter(complete.cases(.) == TRUE) %>%
   ggplot() +
     geom_bar(mapping = aes(x = AGE_RANGE)) +
     labs(x = "", y = "", title = "Primary Shopper Age")
 
 size <- households %>%
-  filter(is.na(HH_SIZE) == FALSE) %>%
+  filter(complete.cases(.) == TRUE) %>%
   ggplot() +
     geom_bar(mapping = aes(x = HH_SIZE)) +
     labs(x = "", y = "", title = "Size of Household")
 
 comp <- households %>%
-  filter(is.na(HSHD_COMPOSITION) == FALSE) %>%
+  filter(complete.cases(.) == TRUE) %>%
   ggplot() +
     geom_bar(mapping = aes(x = HSHD_COMPOSITION)) +
     labs(x = "", y = "", title = "Household Composition")
 
 children <- households %>%
-  filter(is.na(CHILDREN) == FALSE) %>%
+  filter(complete.cases(.) == TRUE) %>%
   ggplot() +
     geom_bar(mapping = aes(x = CHILDREN)) +
     labs(x = "", y = "", title = "Number of Children")
 
 homeowner <- households %>%
-  filter(is.na(HOMEOWNER) == FALSE) %>%
+  filter(complete.cases(.) == TRUE) %>%
   ggplot() +
     geom_bar(mapping = aes(x = HOMEOWNER)) +
     labs(x = "", y = "", title = "Homeowner Status") +
     coord_flip()
 
 loyalty <- households %>%
-  filter(is.na(L) == FALSE) %>%
+  filter(complete.cases(.) == TRUE) %>%
   ggplot() +
     geom_bar(mapping = aes(x = L)) +
     labs(x = "", y = "", title = "Loyalty Card Status") +
     coord_flip()
 
 marital <- households %>%
-  filter(is.na(MARITAL) == FALSE) %>%
+  filter(complete.cases(.) == TRUE) %>%
   ggplot() +
     geom_bar(mapping = aes(x = MARITAL)) +
     labs(x = "", y = "", title = "Marital Status") +
@@ -144,7 +151,7 @@ The households data set has 5000 observations, one for each household with a uni
 
 The majority of households fall between the ages of 35 and 74 and the distribution of age appears to be fairly normal with the exception of the very low number of households in the 19-24 range. This could be due to the fact that many younger shoppers still use their parent's loyalty card, so their data could show up under their parent's age. The vast majority of households are owners as opposed to renters and the majority of households also have a loyalty card. Income is slightly skewed right with fewer households making above $75,000. Many households in the data set are also comprised of only two adults, or two adults with one child. 
 
-```{r hh_grid_plots, echo=FALSE, fig.height=10, fig.width=9}
+```{r hh_grid_plots, echo=FALSE, fig.height=10, fig.width=8}
 grid.arrange(size, age, income, homeowner, marital, children, ncol = 2)
 ```
 ```{r hh_loyalty_plot, echo=FALSE, fig.height=3, fig.width=5}
@@ -234,9 +241,18 @@ organic_households <- products %>%
   pivot_wider(names_from = ORGANIC, values_from = c(TOTAL_SPEND, TOTAL_UNITS, UNIQUE_ITEMS), values_fill = list(TOTAL_SPEND = 0, TOTAL_UNITS = 0, UNIQUE_ITEMS = 0)) %>%
   left_join(households, by = "HSHD_NUM") %>%
   mutate(ORG_HOUSE = ifelse(TOTAL_UNITS_ORG > 0, 1, 0)) %>%
-  mutate(CHILDREN = ifelse(HSHD_COMPOSITION %in% c("1 Adult", "2 Adults", "Single Male", "Single Female"), 0, CHILDREN)) %>%
   filter(complete.cases(.) == TRUE)
 ```
+```{r}
+#save out created datasets to work with in future
+
+setwd(paths[Sys.info()[7]])
+save(market_basket, file = "market_basket.Rdata", compress = FALSE)
+save(organic_households, file = "organic_households.Rdata", compress = FALSE)
+
+#should be able to use function "load(file = "organic_households.Rdata")" to load dataset when you need it in a different notebook
+```
+
 ```{r}
 summary(organic_households)
 ```
