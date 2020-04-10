@@ -6,7 +6,8 @@ output: html_notebook
 #load needed libraries
 library(tidyverse)
 library(lubridate)
-library(gridExtra) # test
+library(gridExtra) 
+library(modeest)
 ```
 ```{r set_wd_load_data, warning=FALSE, include=FALSE, message=FALSE}
 #Setting wd and loading data
@@ -187,13 +188,23 @@ Through data exploration, we found that 6,427 transactions had negative spend. W
 
 ```{r baskets, include=FALSE}
 #creating a data set with basket level detail - filter out returns
+mode <- function(x){
+  which.max(tabulate(x))
+}
+
 baskets <- transactions %>%
+  mutate(YEAR = as.numeric(YEAR)) %>%
+  mutate(DATE = as.numeric(DATE)) %>%
   group_by(HSHD_NUM, BASKET_NUM) %>%
   summarise(
     PRODUCTS = n(),
     TOTAL_SPEND = sum(SPEND),
-    TOTAL_UNITS = sum(UNITS)
-  )
+    TOTAL_UNITS = sum(UNITS),
+    DATE = mode(DATE), #baskets can have multiple dates but they all appear to only differ by one day, suggesting these are purchases taking place around midnight - the first item scanned may have been at 11:58 pm the previous day and the last item scanned at 12:01 am the current day - this is an assumption as time of scan is not available. This function takes the mode as the actual date
+    YEAR = mode(YEAR)
+  ) %>%
+  mutate(YEAR = ifelse(YEAR == 1, "2016", "2017")) %>%
+  mutate(DATE = as_date(DATE, origin = lubridate::origin))
 
 summary(baskets)
 ```
@@ -243,12 +254,48 @@ organic_households <- products %>%
   mutate(ORG_HOUSE = ifelse(TOTAL_UNITS_ORG > 0, 1, 0)) %>%
   filter(complete.cases(.) == TRUE)
 ```
+```{r household_increase, include=FALSE}
+#first we will take the baskets dataset & compute the average spend per basket per year and the average cost per item per year
+
+basket_by_year <- baskets %>%
+  mutate(COST_PER_UNIT = TOTAL_SPEND / TOTAL_UNITS) %>%
+  group_by(HSHD_NUM, YEAR) %>% 
+  summarise(
+    AVG_SPEND = mean(TOTAL_SPEND),
+    AVG_UNITS = mean(TOTAL_UNITS),
+    AVG_COST_PER_UNIT = mean(COST_PER_UNIT)
+  ) %>%
+  pivot_wider(names_from = c(YEAR), values_from = c(AVG_SPEND, AVG_UNITS, AVG_COST_PER_UNIT), values_fill = list(AVG_SPEND = 0, AVG_UNITS = 0, AVG_COST_PER_UNIT = 0))
+
+household_increase <- products %>%
+  select(PRODUCT_NUM, ORGANIC) %>%
+  mutate(ORGANIC = str_replace(ORGANIC, "N", "NORG")) %>%
+  mutate(ORGANIC = str_replace(ORGANIC, "Y", "ORG")) %>% 
+  right_join(transactions, by = "PRODUCT_NUM") %>%
+  group_by(HSHD_NUM, ORGANIC, YEAR) %>%
+  summarise(
+    TRIPS = n(),
+    TOTAL_SPEND = sum(SPEND),
+    TOTAL_UNITS = sum(UNITS),
+    UNIQUE_ITEMS = n_distinct(PRODUCT_NUM)) %>% 
+  ungroup() %>%
+  pivot_wider(names_from = c(ORGANIC, YEAR), values_from = c(TRIPS, TOTAL_SPEND, TOTAL_UNITS, UNIQUE_ITEMS), values_fill = list(TRIPS = 0, TOTAL_SPEND = 0, TOTAL_UNITS = 0, UNIQUE_ITEMS = 0)) %>%
+  left_join(households, by = "HSHD_NUM") %>%
+  mutate(ORG_INCREASE = ifelse(TOTAL_SPEND_ORG_2016 < TOTAL_SPEND_ORG_2017, 1, 0)) %>%
+  filter(complete.cases(.) == TRUE) %>%
+  filter(TOTAL_SPEND_ORG_2016 > 0) %>%
+  mutate(PERCENT_ORG_CHANGE = (TOTAL_SPEND_ORG_2017 - TOTAL_SPEND_ORG_2016) / TOTAL_SPEND_ORG_2016) %>%
+  left_join(basket_by_year, by = "HSHD_NUM")
+
+```
+
 ```{r}
 #save out created datasets to work with in future
 
 setwd(paths[Sys.info()[7]])
 save(market_basket, file = "market_basket.Rdata", compress = FALSE)
 save(organic_households, file = "organic_households.Rdata", compress = FALSE)
+save(household_increase, file = "household_increase.Rdata", compress = FALSE)
 
 #should be able to use function "load(file = "organic_households.Rdata")" to load dataset when you need it in a different notebook
 ```
