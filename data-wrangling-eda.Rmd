@@ -12,9 +12,9 @@ library(modeest)
 ```{r set_wd_load_data, warning=FALSE, include=FALSE, message=FALSE}
 #Setting wd and loading data
 #put the path of where you are storing the data on your computer
-paths = c('C:/Users/eliza/Documents/BANA 7047 - Data Mining II/Group Project/Data', 'C:/Users/ashle/Downloads/8451_The_Complete_Journey_2_Master (1)/The_Complete_Journey_2_Master', 'path3')
+paths = c('C:/Users/eliza/Documents/BANA 7047 - Data Mining II/Group Project/Data', 'C:/Users/ashle/Downloads/8451_The_Complete_Journey_2_Master (1)/The_Complete_Journey_2_Master', 'C:/Users/xiaoj/Desktop/BANA/BANA7047 Data Mining II/Project/8451_The_Complete_Journey_2_Master/The_Complete_Journey_2_Master')
 #use the code Sys.info()[7] to find out how your name is stored on your local machine, copy to this list
-names(paths) = c('eliza', 'ashle', 'name3')
+names(paths) = c('eliza', 'ashle', 'xiaoj')
 #this will set the wd
 setwd(paths[Sys.info()[7]])
 
@@ -307,19 +307,19 @@ summary(organic_households)
 ## Proposed Work for the Rest of the Project
 
 
-## Daily SPEND Prediction 
-```{r}
+## Explore Models for Increasing Organic Revenue 
+```{r org_merge, include=FALSE}
 # merge data by "HSHD_NUM" and "PRODUCT_NUM"
 merge_df <- merge(transactions,products,by="PRODUCT_NUM")
 merge_df <- merge(merge_df,households,by="HSHD_NUM")
 str(merge_df)
 ```
-```{r}
+```{r org_int,include=FALSE}
 # set HSHD_NUM/PRODUCT_NUM /BASKET_NUM to interger variable
 merge_df[sapply(merge_df, is.character)] <- lapply(merge_df[sapply(merge_df, is.character)],as.integer)
 ```
 
-```{r}
+```{r yr_split,include=FALSE}
 # filter Organic transactions and split by YEAR
 organic <- merge_df%>%filter(ORGANIC=="Y")
 organic_2016 <- organic%>%filter(YEAR=="2016")
@@ -328,22 +328,19 @@ organic_2017 <- organic%>%filter(YEAR=="2017")
 # check "organic_2016" structure
 str(organic_2016)
 ```
-```{r}
+```{r str2016,include=FALSE}
 # check range of "organic_2016$WEEK_NUM"
 summary(organic_2016$WEEK_NUM)
 ```
-```{r}
+```{r fac2016week,include=FALSE}
 # set "organic_2016$WEEK_NUM" as factor
 organic_2016$WEEK_NUM <- as.factor(organic_2016$WEEK_NUM)
 ```
-
-```{r}
+```{r week2017,include=FALSE}
 # check range of "organic_2017$WEEK_NUM"
 summary(organic_2017$WEEK_NUM)
 ```
-
-
-```{r}
+```{r fac_week_2017,include=FALSE}
 # set "organic_2017$WEEK_NUM" as factor
 organic_2017$WEEK_NUM <- as.factor(organic_2017$WEEK_NUM)
 
@@ -352,7 +349,7 @@ levels(organic_2017$WEEK_NUM) <- seq(1,52,1)
 levels(organic_2017$WEEK_NUM)
 ```
 
-```{r}
+```{r agr_week,include=FALSE}
 # aggregate data by "WEEK_NUM"
 organic_SPEND_week_2016 <- organic_2016%>%group_by(WEEK_NUM)%>%
   summarise(SPEND_SUM_16=sum(SPEND),          # total spend(can be view as total revenue) for each week
@@ -369,7 +366,7 @@ organic_SPEND_week_2017 <- organic_2017%>%group_by(WEEK_NUM)%>%
 organic_SPEND_week_2016
 organic_SPEND_week_2017
 ```
-```{r}
+```{r bar_week_rev,echo=FALSE}
 # bar chart Weekly Agregate SPEND each year
 library(ggplot2)
 ggplot(organic_SPEND_week_2016,aes(WEEK_NUM,SPEND_SUM_16))+geom_bar(stat = "identity")+
@@ -378,12 +375,12 @@ ggplot(organic_SPEND_week_2016,aes(WEEK_NUM,SPEND_SUM_16))+geom_bar(stat = "iden
 ggplot(organic_SPEND_week_2017,aes(WEEK_NUM,SPEND_SUM_17))+geom_bar(stat = "identity")+
   ggtitle("Organic Weekly Agregate SPEND - 2017")
 ```
-```{r}
+```{r remerge_week,include=FALSE}
 # combine Weekly Agregate SPEND in a data set
 organic_SPEND_week <- merge(organic_SPEND_week_2016,organic_SPEND_week_2017,by="WEEK_NUM")
 organic_SPEND_week
 ```
-```{r}
+```{r line_sum_spend,echo=FALSE}
 # Organic Weekly Agregate SPEND_SUM
 ggplot(organic_SPEND_week, aes(WEEK_NUM)) + 
   geom_line(aes(y = SPEND_SUM_16, colour = "SPEND_SUM_16")) + 
@@ -391,7 +388,7 @@ ggplot(organic_SPEND_week, aes(WEEK_NUM)) +
   theme(legend.position="bottom")+
   ggtitle("Organic Weekly Agregate SPEND_SUM")
 ```
-```{r}
+```{r line_avg_spend,echo=FALSE}
 # Organic Weekly Agregate SPEND_AVG
 ggplot(organic_SPEND_week, aes(WEEK_NUM)) + 
   geom_line(aes(y = SPEND_AVG_16, colour = "SPEND_AVG_16")) + 
@@ -399,16 +396,20 @@ ggplot(organic_SPEND_week, aes(WEEK_NUM)) +
   theme(legend.position="bottom")+
   ggtitle("Organic Weekly Agregate SPEND_AVG")
 ```
-```{r}
-# aggregate data by "DATE"
+```{r get_org_name,include=FALSE}
+# check table name
+colnames(organic)
+```
+```{r spend_count,include=FALSE}
+# aggregate data by "DATE" and do numeric vaible count
 organic_SPEND_DATE <- organic%>%group_by(DATE)%>%
   summarise(SPEND_SUM=sum(SPEND),          # daily total spend(can be view as total revenue)
             SPEND_AVG=mean(SPEND),        # daily average spend(can be view as average revenue)
-            TRAN_NUM=n())
-  
+            TRAN_NUM=n(),
+            UNI_NUM=sum(UNITS))
 organic_SPEND_DATE
 ```
-```{r}
+```{r spend_ts,echo=FALSE}
 # plot daily spend 
 
 library(latticeExtra)
@@ -420,6 +421,64 @@ obj2 <- xyplot(SPEND_AVG ~ DATE, organic_SPEND_DATE, type = "l", lwd=2)
 # --> Make the plot with second y axis AND legend:
 doubleYScale(obj1, obj2, text = c("SPEND_SUM_daily", "SPEND_AVG_daily") , add.ylab2 = TRUE)
 ```
+```{r reg_ltow,include=FALSE}
+# reshape REGION count long to wide
+library(data.table)
+org_region <- organic[c("DATE" ,"REGION")]
+org_region <- dcast(melt(setDT(org_region), id.var=c("DATE"))[value!=""], DATE ~ value, value.var="DATE", length)
+head(org_region)
+```
+```{r dep_ltow,include=FALSE}
+# reshape DEPARTMENT count long to wide
+org_dep <- organic[c("DATE" ,"DEPARTMENT")]
+org_dep <- dcast(melt(setDT(org_dep), id.var=c("DATE"))[value!=""], DATE ~ value, value.var="DATE", length)
+head(org_dep)
+```
+```{r com_ltow,include=FALSE}
+# reshape COMMODITY count long to wide
+org_com <- organic[c("DATE" ,"COMMODITY")]
+org_com <- dcast(melt(setDT(org_com), id.var=c("DATE"))[value!=""], DATE ~ value, value.var="DATE", length)
+head(org_com)
+```
+```{r bra_ltow,include=FALSE}
+# reshape BRAND_TY count long to wide
+org_bra <- organic[c("DATE" ,"BRAND_TY")]
+org_bra <- dcast(melt(setDT(org_bra), id.var=c("DATE"))[value!=""], DATE ~ value, value.var="DATE", length)
+head(org_bra)
+```
+```{r loy_ltow,include=FALSE }
+# reshape L count long to wide
+org_loy <- organic[c("DATE" ,"L")]
+org_loy <- dcast(melt(setDT(org_loy), id.var=c("DATE"))[value!=""], DATE ~ value, value.var="DATE", length)
+head(org_loy)
+```
+```{r}
+organic_DATE <- merge(organic_SPEND_DATE,org_region,by="DATE")
+organic_DATE <- merge(organic_DATE,org_dep,by="DATE")
+organic_DATE <- merge(organic_DATE,org_com,by="DATE")
+organic_DATE <- merge(organic_DATE,org_bra,by="DATE")
+organic_DATE <- merge(organic_DATE,org_loy,by="DATE")
+head(organic_DATE)
+```
+```{r}
+organic_DATE_s <- organic_DATE[,c(2:37)]
+summary(lm(SPEND_SUM~SPEND_AVG+TRAN_NUM+UNI_NUM,organic_DATE_s))
+```
+```{r}
+colnames(organic_DATE_s)
+```
+
+```{r}
+library(mgcv)
+summary(gam(SPEND_SUM~s(SPEND_AVG)+s(TRAN_NUM)+s(UNI_NUM),data=organic_DATE_s))
+```
+
+
+
+
+
+
+
 # Idea from the SPEND Time Series Plots
 * From the Weekly SPEND Plots, we can see weekly Organic_SPEND_SUM increases in 2017 in general. However, Organic_SPEND_AVG in 2017 seems decreases in general.
 
