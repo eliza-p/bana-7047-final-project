@@ -306,6 +306,63 @@ summary(organic_households)
 
 ## Proposed Work for the Rest of the Project
 
+#Predicting Organic Households
+The goal for this part of the analysis is to come up with a classification model that can help predict whether a household will buy organic products. For the remainder of the semester, logistic regression and classification tree models will be used to try and achieve this goal. An "organic household" subset of the original data sets was created with the dependent variable being "ORG_HOUSE" (1 if the household has purchased an organic product, 0 if not). This data set contains only complete observations and includes the demographic data from the households data set as well as the amount spent, total units purchased, and unique purcahsed for both organic and non-organic products. This data set has a total of 3,370 observations and 16 variables. 
+
+Looking at the summary of the data, 2,791 households have purchased an organic product (this is about 83% of the data set). Because a household will qualify as an "organic household" even if they've only purchased one organic product, this percentage is very high. After defining an initial model, we may introduce a different threshold for a household to be able to qualify as "organic." Some preliminary ideas are if a household purchases 25% or 50% more units of organic goods than non-organic goods, or if a household spends a certain amount of money on organic products. 
+
+```{r org household summary, include=TRUE}
+summary(organic_households)
+```
+
+Through some preliminary data exploration, we see that both organic and non-organic households appear to be somewhat normally distributed by age ranges. There doesn't appear to be a clear demographic factor that organic households share, so this is something we will try to narrow down in our future analysis. 
+
+```{r org household age, include=TRUE}
+
+counts<- table(organic_households$ORG_HOUSE, organic_households$AGE_RANGE)
+counts2<- table(organic_households$ORG_HOUSE, organic_households$INCOME_RANGE)
+counts3<- table(organic_households$ORG_HOUSE, organic_households$MARITAL)
+counts4<- table(organic_households$ORG_HOUSE, organic_households$HH_SIZE)
+
+
+org_age <- barplot(counts, main="Organic Households by Age Range",
+        xlab="Age Range", col=c("lightblue","lightgreen"),
+        legend = c("Not Organic", "Organic"), beside=TRUE)
+
+org_income <- barplot(counts2, main="Organic Households by Income Range",
+        xlab="Income Range", col=c("lightblue","lightgreen"),
+        legend = c("Not Organic", "Organic"), beside=FALSE)
+
+org_marital <- barplot(counts3, main="Organic Households by Marital Status",
+                      xlab="Marital Status", col=c("lightblue","lightgreen"),
+                      legend = c("Not Organic", "Organic"), beside=FALSE)
+
+org_size <- barplot(counts4, main="Organic Households by HH Size",
+                      xlab="HH Size", col=c("lightblue","lightgreen"),
+                      legend = c("Not Organic", "Organic"), beside=FALSE)
+
+par(mfrow=c(2,2))
+org_age
+org_income
+org_marital
+org_size
+
+```
+
+Additionally, when plotting the nonorganic spend with the nonorganic number of units purchased, there is a somewhat linear relationship, which is to be expected, but non-organic households (blue) tend to purchase fewer units and spend less on non-organic products than orgnaic households. Zooming in on this chart reveals that many non-organic households are clustered between $100 spend and 200 units. This means that organic households are not only purchasing organic products, but they are also purchasing more expensive and higher quantities of non-organic quantities than the non-organic households. 
+
+```{r nonorganic spend and units purchased, include=TRUE}
+par(mfrow=c(1,2))
+
+org_spend1 <- plot(organic_households$TOTAL_UNITS_NORG~organic_households$TOTAL_SPEND_NORG, xlab="Total Units Non-Organic", ylab="Total Spend Non-Organic", xlim=c(0,50000), ylim=c(0,20000), main="NonOrganic Units vs Spend", pch=2, cex.main=1.5, frame.plot=FALSE, col=ifelse(organic_households$ORG_HOUSE==1,"red","blue"))
+legend(80, 15000, pch=c(2,2), col=c("red", "blue"), c("Organic", "NonOrganic"), bty="o",  box.col="darkgreen", cex=.8)
+
+org_spend2 <- plot(organic_households$TOTAL_UNITS_NORG~organic_households$TOTAL_SPEND_NORG, xlab="Total Units Non-Organic", ylab="Total Spend Non-Organic", xlim=c(0,1000), ylim=c(0,400), main="NonOrganic Units vs Spend", pch=2, cex.main=1.5, frame.plot=FALSE, col=ifelse(organic_households$ORG_HOUSE==1,"red","blue"))
+legend(80, 350, pch=c(2,2), col=c("red", "blue"), c("Organic", "NonOrganic"), bty="o",  box.col="darkgreen", cex=.8)
+
+```
+
+
 
 ## Organic Selling Seasonality Analysis 
 * Seasonality is common influnce factor in marketing. We are interested in detecting When/Where/How to conduct better organic marketing strategy. To that end, we use aggregated "SPEND" of organic selling data to detect possible seasonality patterns.
