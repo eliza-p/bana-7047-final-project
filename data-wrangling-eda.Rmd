@@ -307,7 +307,7 @@ summary(organic_households)
 ## Proposed Work for the Rest of the Project
 
 
-## Explore Models for Increasing Organic Revenue 
+## Organic Selling Seasonality Analysis 
 ```{r org_merge, include=FALSE}
 # merge data by "HSHD_NUM" and "PRODUCT_NUM"
 merge_df <- merge(transactions,products,by="PRODUCT_NUM")
@@ -317,6 +317,7 @@ str(merge_df)
 ```{r org_int,include=FALSE}
 # set HSHD_NUM/PRODUCT_NUM /BASKET_NUM to interger variable
 merge_df[sapply(merge_df, is.character)] <- lapply(merge_df[sapply(merge_df, is.character)],as.integer)
+head(merge_df)
 ```
 
 ```{r yr_split,include=FALSE}
@@ -324,7 +325,7 @@ merge_df[sapply(merge_df, is.character)] <- lapply(merge_df[sapply(merge_df, is.
 organic <- merge_df%>%filter(ORGANIC=="Y")
 organic_2016 <- organic%>%filter(YEAR=="2016")
 organic_2017 <- organic%>%filter(YEAR=="2017")
-
+summary(organic)
 # check "organic_2016" structure
 str(organic_2016)
 ```
@@ -348,19 +349,31 @@ organic_2017$WEEK_NUM <- as.factor(organic_2017$WEEK_NUM)
 levels(organic_2017$WEEK_NUM) <- seq(1,52,1)
 levels(organic_2017$WEEK_NUM)
 ```
+```{r rbind_org include=FALSE}
+# concatenate data
+organic_week <- rbind(organic_2016,organic_2017)
+summary(organic_week)
+```
+```{r weeknum_check include=FALSE}
+# make sure WEEK_NUM level reset
+summary(organic_week$WEEK_NUM)
+```
 
 ```{r agr_week,include=FALSE}
 # aggregate data by "WEEK_NUM"
+library(dplyr)
 organic_SPEND_week_2016 <- organic_2016%>%group_by(WEEK_NUM)%>%
   summarise(SPEND_SUM_16=sum(SPEND),          # total spend(can be view as total revenue) for each week
             SPEND_AVG_16=mean(SPEND),        # average spend(can be view as average revenue) for each week
-            TRAN_NUM_16=n())%>%
+            TRAN_NUM_16=n(),
+            UNI_NUM_16=sum(UNITS))%>%
   mutate(WEEK_NUM=as.integer(WEEK_NUM))
 
 organic_SPEND_week_2017 <- organic_2017%>%group_by(WEEK_NUM)%>%
   summarise(SPEND_SUM_17=sum(SPEND),          # total spend(can be view as total revenue) for each week
             SPEND_AVG_17=mean(SPEND),        # average spend(can be view as average revenue) for each week
-            TRAN_NUM_17=n())%>%
+            TRAN_NUM_17=n(),
+            UNI_NUM_17=sum(UNITS))%>%
   mutate(WEEK_NUM=as.integer(WEEK_NUM))
 
 organic_SPEND_week_2016
@@ -386,16 +399,49 @@ ggplot(organic_SPEND_week, aes(WEEK_NUM)) +
   geom_line(aes(y = SPEND_SUM_16, colour = "SPEND_SUM_16")) + 
   geom_line(aes(y = SPEND_SUM_17, colour = "SPEND_SUM_17"))+
   theme(legend.position="bottom")+
-  ggtitle("Organic Weekly Agregate SPEND_SUM")
-```
-```{r line_avg_spend,echo=FALSE}
+  ggtitle("Organic Weekly Agregate SPEND_AVG")
+
 # Organic Weekly Agregate SPEND_AVG
 ggplot(organic_SPEND_week, aes(WEEK_NUM)) + 
   geom_line(aes(y = SPEND_AVG_16, colour = "SPEND_AVG_16")) + 
   geom_line(aes(y = SPEND_AVG_17, colour = "SPEND_AVG_17"))+
   theme(legend.position="bottom")+
   ggtitle("Organic Weekly Agregate SPEND_AVG")
+
+# Organic Weekly Agregate TRAN_NUM
+ggplot(organic_SPEND_week, aes(WEEK_NUM)) + 
+  geom_line(aes(y = TRAN_NUM_16, colour = "TRAN_NUM_16")) + 
+  geom_line(aes(y = TRAN_NUM_17, colour = "TRAN_NUM_17"))+
+  theme(legend.position="bottom")+
+  ggtitle("Organic Weekly Agregate TRAN_NUM")
+
+# Organic Weekly Agregate UNI_NUM
+ggplot(organic_SPEND_week, aes(WEEK_NUM)) + 
+  geom_line(aes(y = UNI_NUM_16, colour = "UNI_NUM_16")) + 
+  geom_line(aes(y = UNI_NUM_17, colour = "UNI_NUM_17"))+
+  theme(legend.position="bottom")+
+  ggtitle("Organic Weekly Agregate UNI_NUM")
+
 ```
+```{r re-merge-org,include=FALSE}
+# re-merge organic data by reset WEEK_NUM
+organic_WEEK <- rbind(organic_2016,organic_2017)
+organic_WEEK <- organic_WEEK%>%arrange(DATE)%>%
+  mutate(HSHD_NUM
+    WEEK_NUM=as.factor(WEEK_NUM),
+         )
+head(organic_WEEK)
+summary(organic_WEEK)
+```
+```{r rf_org, include=FALSE}
+# random forest
+library(randomForest)
+org_spend_rf<- randomForest(SPEND~HSHD_NUM+PRODUCT_NUM+REGION+WEEK_NUM+COMMODITY+BRAND_TY+BRAND_TY, data = organic_WEEK, importance=TRUE)
+org_spend_rf
+```
+
+
+
 ```{r get_org_name,include=FALSE}
 # check table name
 colnames(organic)
@@ -452,7 +498,7 @@ org_loy <- organic[c("DATE" ,"L")]
 org_loy <- dcast(melt(setDT(org_loy), id.var=c("DATE"))[value!=""], DATE ~ value, value.var="DATE", length)
 head(org_loy)
 ```
-```{r}
+```{r merge_daily_n ,include=FALSE}
 organic_DATE <- merge(organic_SPEND_DATE,org_region,by="DATE")
 organic_DATE <- merge(organic_DATE,org_dep,by="DATE")
 organic_DATE <- merge(organic_DATE,org_com,by="DATE")
@@ -460,15 +506,15 @@ organic_DATE <- merge(organic_DATE,org_bra,by="DATE")
 organic_DATE <- merge(organic_DATE,org_loy,by="DATE")
 head(organic_DATE)
 ```
-```{r}
+```{r lm_keys,include=FALSE}
 organic_DATE_s <- organic_DATE[,c(2:37)]
 summary(lm(SPEND_SUM~SPEND_AVG+TRAN_NUM+UNI_NUM,organic_DATE_s))
 ```
 ```{r}
-colnames(organic_DATE_s)
+#colnames(organic_DATE_s)
 ```
 
-```{r}
+```{r gam_key,include=FALSE}
 library(mgcv)
 summary(gam(SPEND_SUM~s(SPEND_AVG)+s(TRAN_NUM)+s(UNI_NUM),data=organic_DATE_s))
 ```
