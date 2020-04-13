@@ -308,6 +308,10 @@ summary(organic_households)
 
 
 ## Organic Selling Seasonality Analysis 
+* Seasonality is common influnce factor in marketing. We are interested in detecting When/Where/How to conduct better organic marketing strategy. To that end, we use aggregated "SPEND" of organic selling data to detect possible seasonality patterns.
+* From aggregated "SPEND" time series plots, we can see sense some seasonality.
+* In order to find out more accurate seasonality insights, we plan to fit KNN/PAC/K-means/Hierarchical Clustering/Seasonal ARIMA models in to our aggregated "SPEND" time series data to help us detect more accurate seasonality patterns and forecast future trend.
+
 ```{r org_merge, include=FALSE}
 # merge data by "HSHD_NUM" and "PRODUCT_NUM"
 merge_df <- merge(transactions,products,by="PRODUCT_NUM")
@@ -322,7 +326,10 @@ head(merge_df)
 
 ```{r yr_split,include=FALSE}
 # filter Organic transactions and split by YEAR
-organic <- merge_df%>%filter(ORGANIC=="Y")
+organic <- merge_df%>%filter(ORGANIC=="Y")%>%mutate(WEEK_NUM=as.integer(WEEK_NUM),
+                                                    HSHD_NUM=as.factor(HSHD_NUM),
+                                                    PRODUCT_NUM=as.factor(PRODUCT_NUM),
+                                                    BASKET_NUM=as.factor(BASKET_NUM))
 organic_2016 <- organic%>%filter(YEAR=="2016")
 organic_2017 <- organic%>%filter(YEAR=="2017")
 summary(organic)
@@ -354,187 +361,89 @@ levels(organic_2017$WEEK_NUM)
 organic_week <- rbind(organic_2016,organic_2017)
 summary(organic_week)
 ```
-```{r weeknum_check include=FALSE}
-# make sure WEEK_NUM level reset
-summary(organic_week$WEEK_NUM)
+```{r org_week_spend_region,include=FALSE}
+# aggregate SPEND by week & region
+org_week_east_spend <- organic%>%filter(REGION=="EAST")%>%group_by(WEEK_NUM)%>%summarise(SPEND_E=sum(SPEND))
+org_week_south_spend <- organic%>%filter(REGION=="SOUTH")%>%group_by(WEEK_NUM)%>%summarise(SPEND_S=sum(SPEND))
+org_week_west_spend <- organic%>%filter(REGION=="WEST")%>%group_by(WEEK_NUM)%>%summarise(SPEND_W=sum(SPEND))
+org_week_central_spend <- organic%>%filter(REGION=="CENTRAL")%>%group_by(WEEK_NUM)%>%summarise(SPEND_C=sum(SPEND))
+organic_week_reg_spend <- merge(org_week_east_spend,org_week_south_spend,by="WEEK_NUM")
+organic_week_reg_spend <- merge(organic_week_reg_spend,org_week_west_spend,by="WEEK_NUM")
+organic_week_reg_spend <- merge(organic_week_reg_spend,org_week_central_spend,by="WEEK_NUM")
+organic_week_reg_spend
 ```
-
-```{r agr_week,include=FALSE}
-# aggregate data by "WEEK_NUM"
-library(dplyr)
-organic_SPEND_week_2016 <- organic_2016%>%group_by(WEEK_NUM)%>%
-  summarise(SPEND_SUM_16=sum(SPEND),          # total spend(can be view as total revenue) for each week
-            SPEND_AVG_16=mean(SPEND),        # average spend(can be view as average revenue) for each week
-            TRAN_NUM_16=n(),
-            UNI_NUM_16=sum(UNITS))%>%
-  mutate(WEEK_NUM=as.integer(WEEK_NUM))
-
-organic_SPEND_week_2017 <- organic_2017%>%group_by(WEEK_NUM)%>%
-  summarise(SPEND_SUM_17=sum(SPEND),          # total spend(can be view as total revenue) for each week
-            SPEND_AVG_17=mean(SPEND),        # average spend(can be view as average revenue) for each week
-            TRAN_NUM_17=n(),
-            UNI_NUM_17=sum(UNITS))%>%
-  mutate(WEEK_NUM=as.integer(WEEK_NUM))
-
-organic_SPEND_week_2016
-organic_SPEND_week_2017
-```
-```{r bar_week_rev,echo=FALSE}
-# bar chart Weekly Agregate SPEND each year
-library(ggplot2)
-ggplot(organic_SPEND_week_2016,aes(WEEK_NUM,SPEND_SUM_16))+geom_bar(stat = "identity")+
-  ggtitle("Organic Weekly Agregate SPEND - 2016")
-
-ggplot(organic_SPEND_week_2017,aes(WEEK_NUM,SPEND_SUM_17))+geom_bar(stat = "identity")+
-  ggtitle("Organic Weekly Agregate SPEND - 2017")
-```
-```{r remerge_week,include=FALSE}
-# combine Weekly Agregate SPEND in a data set
-organic_SPEND_week <- merge(organic_SPEND_week_2016,organic_SPEND_week_2017,by="WEEK_NUM")
-organic_SPEND_week
-```
-```{r line_sum_spend,echo=FALSE}
-# Organic Weekly Agregate SPEND_SUM
-ggplot(organic_SPEND_week, aes(WEEK_NUM)) + 
-  geom_line(aes(y = SPEND_SUM_16, colour = "SPEND_SUM_16")) + 
-  geom_line(aes(y = SPEND_SUM_17, colour = "SPEND_SUM_17"))+
+```{r week_reg_org_spend, echo=FALSE}
+# plot Organic Weekly Agregate SPEND by REGION
+ggplot(organic_week_reg_spend, aes(WEEK_NUM)) + 
+  geom_line(aes(y = SPEND_E, colour = "EAST")) + 
+  geom_line(aes(y = SPEND_S, colour = "SOUTH"))+
+  geom_line(aes(y = SPEND_W, colour = "WEST"))+
+  geom_line(aes(y = SPEND_C, colour = "CENTRAL"))+
   theme(legend.position="bottom")+
-  ggtitle("Organic Weekly Agregate SPEND_AVG")
-
-# Organic Weekly Agregate SPEND_AVG
-ggplot(organic_SPEND_week, aes(WEEK_NUM)) + 
-  geom_line(aes(y = SPEND_AVG_16, colour = "SPEND_AVG_16")) + 
-  geom_line(aes(y = SPEND_AVG_17, colour = "SPEND_AVG_17"))+
-  theme(legend.position="bottom")+
-  ggtitle("Organic Weekly Agregate SPEND_AVG")
-
-# Organic Weekly Agregate TRAN_NUM
-ggplot(organic_SPEND_week, aes(WEEK_NUM)) + 
-  geom_line(aes(y = TRAN_NUM_16, colour = "TRAN_NUM_16")) + 
-  geom_line(aes(y = TRAN_NUM_17, colour = "TRAN_NUM_17"))+
-  theme(legend.position="bottom")+
-  ggtitle("Organic Weekly Agregate TRAN_NUM")
-
-# Organic Weekly Agregate UNI_NUM
-ggplot(organic_SPEND_week, aes(WEEK_NUM)) + 
-  geom_line(aes(y = UNI_NUM_16, colour = "UNI_NUM_16")) + 
-  geom_line(aes(y = UNI_NUM_17, colour = "UNI_NUM_17"))+
-  theme(legend.position="bottom")+
-  ggtitle("Organic Weekly Agregate UNI_NUM")
-
+  ggtitle("Organic Weekly Agregate SPEND by REGION")+
+  ylab("Weekly Aggregated SPEND")
 ```
-```{r re-merge-org,include=FALSE}
-# re-merge organic data by reset WEEK_NUM
-organic_WEEK <- rbind(organic_2016,organic_2017)
-organic_WEEK <- organic_WEEK%>%arrange(DATE)%>%
-  mutate(HSHD_NUM
-    WEEK_NUM=as.factor(WEEK_NUM),
-         )
-head(organic_WEEK)
-summary(organic_WEEK)
-```
-```{r rf_org, include=FALSE}
-# random forest
-library(randomForest)
-org_spend_rf<- randomForest(SPEND~HSHD_NUM+PRODUCT_NUM+REGION+WEEK_NUM+COMMODITY+BRAND_TY+BRAND_TY, data = organic_WEEK, importance=TRUE)
-org_spend_rf
-```
+```{r organic_week_dep_spend, include==FALSE}
+# aggregate SPEND by week & DEPARTMENT
+org_week_nfood_spend <- organic%>%filter(DEPARTMENT=="NON-FOOD")%>%group_by(WEEK_NUM)%>%summarise(SPEND_NFOOD=sum(SPEND))
+org_week_food_spend <- organic%>%filter(DEPARTMENT=="FOOD")%>%group_by(WEEK_NUM)%>%summarise(SPEND_FOOD=sum(SPEND))
+org_week_phar_spend <- organic%>%filter(DEPARTMENT=="PHARMA")%>%group_by(WEEK_NUM)%>%summarise(SPEND_PHAR=sum(SPEND))
+org_week_phar_spend # PHARMA data is omited due to very limited records
+organic_week_dep_spend <- merge(org_week_nfood_spend,org_week_food_spend,by="WEEK_NUM")
+#organic_week_dep_spend <- merge(organic_week_dep_spend,org_week_phar_spend,by="WEEK_NUM")
+#organic_week_dep_spend <- organic_week_dep_spend%>%arrange(WEEK_NUM)
 
-
-
-```{r get_org_name,include=FALSE}
-# check table name
-colnames(organic)
+organic_week_dep_spend
 ```
-```{r spend_count,include=FALSE}
-# aggregate data by "DATE" and do numeric vaible count
-organic_SPEND_DATE <- organic%>%group_by(DATE)%>%
-  summarise(SPEND_SUM=sum(SPEND),          # daily total spend(can be view as total revenue)
-            SPEND_AVG=mean(SPEND),        # daily average spend(can be view as average revenue)
-            TRAN_NUM=n(),
-            UNI_NUM=sum(UNITS))
-organic_SPEND_DATE
-```
-```{r spend_ts,echo=FALSE}
-# plot daily spend 
-
+```{r plot_organic_week_dep_spend,echo=FALSE}
+# plot Organic Weekly Agregate SPEND by DEPARTMENT
 library(latticeExtra)
-
 # --> construct separate plots for each series
-obj1 <- xyplot(SPEND_SUM ~ DATE, organic_SPEND_DATE, type = "l" , lwd=2)
-obj2 <- xyplot(SPEND_AVG ~ DATE, organic_SPEND_DATE, type = "l", lwd=2)
- 
+obj1 <- xyplot(SPEND_NFOOD ~ WEEK_NUM, organic_week_dep_spend, main="Organic Weekly Agregate SPEND by DEPARTMENT",type = "l" , lwd=2)
+obj2 <- xyplot(SPEND_FOOD ~ WEEK_NUM, organic_week_dep_spend, type = "l", lwd=2)
 # --> Make the plot with second y axis AND legend:
-doubleYScale(obj1, obj2, text = c("SPEND_SUM_daily", "SPEND_AVG_daily") , add.ylab2 = TRUE)
+doubleYScale(obj1, obj2, text = c("NON-FOOD", "FOOD") , add.ylab2 = TRUE)
 ```
-```{r reg_ltow,include=FALSE}
-# reshape REGION count long to wide
-library(data.table)
-org_region <- organic[c("DATE" ,"REGION")]
-org_region <- dcast(melt(setDT(org_region), id.var=c("DATE"))[value!=""], DATE ~ value, value.var="DATE", length)
-head(org_region)
+```{r organic_week_brand_spend,include=FALSE}
+# aggregate SPEND by week & BRAND_TY
+org_week_pri_spend <- organic%>%filter(BRAND_TY=="PRIVATE" )%>%group_by(WEEK_NUM)%>%summarise(SPEND_PRI=sum(SPEND))
+org_week_nat_spend <- organic%>%filter(BRAND_TY=="NATIONAL")%>%group_by(WEEK_NUM)%>%summarise(SPEND_NAT=sum(SPEND))
+organic_week_brand_spend <- merge(org_week_pri_spend,org_week_nat_spend,by="WEEK_NUM")
+organic_week_brand_spend
 ```
-```{r dep_ltow,include=FALSE}
-# reshape DEPARTMENT count long to wide
-org_dep <- organic[c("DATE" ,"DEPARTMENT")]
-org_dep <- dcast(melt(setDT(org_dep), id.var=c("DATE"))[value!=""], DATE ~ value, value.var="DATE", length)
-head(org_dep)
+```{r plot_organic_week_brand_spend,echo=FALSE}
+# plot Organic Weekly Agregate SPEND by BRAND_TY
+ggplot(organic_week_brand_spend, aes(WEEK_NUM)) + 
+  geom_line(aes(y = SPEND_PRI, colour = "PRIVATE")) + 
+  geom_line(aes(y = SPEND_NAT, colour = "NATIONAL")) +  
+  theme(legend.position="bottom")+
+  ggtitle("Organic Weekly Agregate SPEND by BRAND_TY")+
+  ylab("Weekly Aggregated SPEND")
 ```
-```{r com_ltow,include=FALSE}
-# reshape COMMODITY count long to wide
-org_com <- organic[c("DATE" ,"COMMODITY")]
-org_com <- dcast(melt(setDT(org_com), id.var=c("DATE"))[value!=""], DATE ~ value, value.var="DATE", length)
-head(org_com)
+```{r organic_week_loy_spend,include=FALSE}
+# aggregate SPEND by week & Loyaty
+org_week_loy_spend <- organic%>%filter(L=="Y" )%>%group_by(WEEK_NUM)%>%summarise(SPEND_LOY=sum(SPEND))
+org_week_nloy_spend <- organic%>%filter(L=="N")%>%group_by(WEEK_NUM)%>%summarise(SPEND_NLOY=sum(SPEND))
+organic_week_loy_spend <- merge(org_week_loy_spend,org_week_nloy_spend,by="WEEK_NUM")
+organic_week_loy_spend
 ```
-```{r bra_ltow,include=FALSE}
-# reshape BRAND_TY count long to wide
-org_bra <- organic[c("DATE" ,"BRAND_TY")]
-org_bra <- dcast(melt(setDT(org_bra), id.var=c("DATE"))[value!=""], DATE ~ value, value.var="DATE", length)
-head(org_bra)
+```{r plot_organic_week_loy_spend,echo=FALSE}
+# plot Organic Weekly Agregate SPEND by LOYAL
+library(latticeExtra)
+# --> construct separate plots for each series
+obj1 <- xyplot(SPEND_NLOY ~ WEEK_NUM, organic_week_loy_spend, main="Organic Weekly Agregate SPEND by LOYAL",type = "l" , lwd=2)
+obj2 <- xyplot(SPEND_LOY ~ WEEK_NUM, organic_week_loy_spend, type = "l", lwd=2)
+# --> Make the plot with second y axis AND legend:
+doubleYScale(obj1, obj2, text = c("NON-LOYAL", "LOYAL") , add.ylab2 = TRUE)
 ```
-```{r loy_ltow,include=FALSE }
-# reshape L count long to wide
-org_loy <- organic[c("DATE" ,"L")]
-org_loy <- dcast(melt(setDT(org_loy), id.var=c("DATE"))[value!=""], DATE ~ value, value.var="DATE", length)
-head(org_loy)
-```
-```{r merge_daily_n ,include=FALSE}
-organic_DATE <- merge(organic_SPEND_DATE,org_region,by="DATE")
-organic_DATE <- merge(organic_DATE,org_dep,by="DATE")
-organic_DATE <- merge(organic_DATE,org_com,by="DATE")
-organic_DATE <- merge(organic_DATE,org_bra,by="DATE")
-organic_DATE <- merge(organic_DATE,org_loy,by="DATE")
-head(organic_DATE)
-```
-```{r lm_keys,include=FALSE}
-organic_DATE_s <- organic_DATE[,c(2:37)]
-summary(lm(SPEND_SUM~SPEND_AVG+TRAN_NUM+UNI_NUM,organic_DATE_s))
-```
-```{r}
-#colnames(organic_DATE_s)
+```{r organic_week_spend,include=FALSE}
+# merge weekly SPEND data
+organic_week_spend <- merge(organic_week_reg_spend,organic_week_dep_spend)
+organic_week_spend <- merge(organic_week_spend,organic_week_brand_spend)
+organic_week_spend <- merge(organic_week_spend,organic_week_loy_spend)
+organic_week_spend <- organic_week_spend%>%mutate(WEEK_NUM=as.factor(WEEK_NUM))
+organic_week_spend
 ```
 
-```{r gam_key,include=FALSE}
-library(mgcv)
-summary(gam(SPEND_SUM~s(SPEND_AVG)+s(TRAN_NUM)+s(UNI_NUM),data=organic_DATE_s))
-```
-
-
-
-
-
-
-
-# Idea from the SPEND Time Series Plots
-* From the Weekly SPEND Plots, we can see weekly Organic_SPEND_SUM increases in 2017 in general. However, Organic_SPEND_AVG in 2017 seems decreases in general.
-
-* We are curious about which elements drove the Organic_SPEND_SUM up in 2017 and curious about predicting future Organic Products revenue.
-  - To fit Linear Regression to training data. Use Stepwise and LASSO approach to do variable selection.
-  - To fit Random Forest, Boosting, GAM models into trainning data.
-  - Compare models and select the best model for predicting Organic Products Revenue and for identifing important varibles which can impact organic revenue significantly.
-  
-* We are also curious about which segmentation we should focus on.
-  - We are going to fit KNN, Clustering Methods, Logistic Regression, Random Forest, Boosting, GAM, NN into training date.
-  - Compare and selecte best model for identifying important customers for organic products selling.
 
 
