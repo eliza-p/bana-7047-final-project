@@ -1,6 +1,8 @@
 ---
 title: "Data Wrangling & EDA"
-output: html_notebook
+output:
+  word_document: default
+  html_notebook: default
 ---
 ```{r libraries, warning=FALSE, include= FALSE}
 #load needed libraries
@@ -10,8 +12,9 @@ library(gridExtra)
 library(modeest)
 library(knitr)
 library(kableExtra)
+library(latticeExtra)
 ```
-```{r set_wd_load_data, warning=FALSE, include=FALSE, message=FALSE}
+```{r set_wd_load_data, include=FALSE, warning=FALSE, message=FALSE}
 #Setting wd and loading data
 #put the path of where you are storing the data on your computer
 paths = c('C:/Users/eliza/Documents/BANA 7047 - Data Mining II/Group Project/Data', 'C:/Users/ashle/Downloads/8451_The_Complete_Journey_2_Master (1)/The_Complete_Journey_2_Master', 'C:/Users/xiaoj/Desktop/BANA/BANA7047 Data Mining II/Project/8451_The_Complete_Journey_2_Master/The_Complete_Journey_2_Master')
@@ -137,12 +140,6 @@ Understanding what drives customers to buy organic products is key as in many se
 A recent report from the Organic Trade Association stated that the U.S. market for organic products was \$52.2 billion and accounted for 5.7% of all food sales in the United States in 2018. They reported that the majority of organic food sales were fruits and vegetables, accounting for $17.4 billion in sales; dairy and eggs made up the second-largest organic food category at \$6.5 billion in sales. Sales of organic fruits and vegetables grew by 5.6% which far surpassed the growth of the overall fruit and vegetable market at 1.7%. Non-food organic products saw 10.6% overall growth from 2017 to 2018 also surpassing the growth of the overall non-food segment at 3.6% (Redman). And recent polling by IRI, a consumer research company, found that 49% of Millennials and 40% of Gen X shoppers consider having a good selection of natural and organic foods important in selecting a grocery store (Emarketer). 
 
 For this project, we are acting as a team of analysts that is interested in identifying households and baskets that are likely to buy organic products so we know who to target for an organic product marketing campaign. In order to do this, we will use data at both the household and basket level and try classification models to accurately identify these households. We are also interested in organic trends over time and will use a classification model to attempt to flag households who have increased their spending on organic products in year two.
-
-(Citations
-Redman, Russell. "Organic Products Hit a Record-Breaking High." Supermarket News (May 20, 2019). https://search-proquest-com.proxy.libraries.uc.edu/docview/2238503079?accountid=2909.)
-
-Emarketer - Data is from the January 2020 IRI report titled "Consumer Connect Q4 2019: Channel Trends in CPG Today." 2,366 US internet users ages 18+ were surveyed online during December 2019.
-https://chart-na1.emarketer.com/234160/attributes-us-internet-users-find-important-store-selection-process-by-generation-dec-2019-of-respondents-each-group
 
 # The Data
 
@@ -296,7 +293,7 @@ summary(organic_households)
 
 Through some preliminary data exploration, we see that both organic and non-organic households appear to be somewhat normally distributed by age ranges. There doesn't appear to be a clear demographic factor that organic households share, so this is something we will try to narrow down in our future analysis. 
 
-```{r org household age, include=TRUE}
+```{r org household age, echo=FALSE}
 
 counts<- table(organic_households$ORG_HOUSE, organic_households$AGE_RANGE)
 counts2<- table(organic_households$ORG_HOUSE, organic_households$INCOME_RANGE)
@@ -330,7 +327,7 @@ org_size
 
 Additionally, when plotting the nonorganic spend with the nonorganic number of units purchased, there is a somewhat linear relationship, which is to be expected, but non-organic households (blue) tend to purchase fewer units and spend less on non-organic products than orgnaic households. Zooming in on this chart reveals that many non-organic households are clustered between $100 spend and 200 units. This means that organic households are not only purchasing organic products, but they are also purchasing more expensive and higher quantities of non-organic quantities than the non-organic households. 
 
-```{r nonorganic spend and units purchased, include=TRUE}
+```{r nonorganic spend and units purchased, echo=FALSE}
 par(mfrow=c(1,2))
 
 org_spend1 <- plot(organic_households$TOTAL_UNITS_NORG~organic_households$TOTAL_SPEND_NORG, xlab="Total Units Non-Organic", ylab="Total Spend Non-Organic", xlim=c(0,50000), ylim=c(0,20000), main="NonOrganic Units vs Spend", pch=2, cex.main=1.5, frame.plot=FALSE, col=ifelse(organic_households$ORG_HOUSE==1,"red","blue"))
@@ -389,7 +386,7 @@ organic_2017$WEEK_NUM <- as.factor(organic_2017$WEEK_NUM)
 levels(organic_2017$WEEK_NUM) <- seq(1,52,1)
 levels(organic_2017$WEEK_NUM)
 ```
-```{r rbind_org include=FALSE}
+```{r rbind_org, include=FALSE}
 # concatenate data
 organic_week <- rbind(organic_2016,organic_2017)
 summary(organic_week)
@@ -416,7 +413,7 @@ ggplot(organic_week_reg_spend, aes(WEEK_NUM)) +
   ggtitle("Organic Weekly Agregate SPEND by REGION")+
   ylab("Weekly Aggregated SPEND")
 ```
-```{r organic_week_dep_spend, include==FALSE}
+```{r organic_week_dep_spend, include=FALSE}
 # aggregate SPEND by week & DEPARTMENT
 org_week_nfood_spend <- organic%>%filter(DEPARTMENT=="NON-FOOD")%>%group_by(WEEK_NUM)%>%summarise(SPEND_NFOOD=sum(SPEND))
 org_week_food_spend <- organic%>%filter(DEPARTMENT=="FOOD")%>%group_by(WEEK_NUM)%>%summarise(SPEND_FOOD=sum(SPEND))
@@ -430,7 +427,6 @@ organic_week_dep_spend
 ```
 ```{r plot_organic_week_dep_spend,echo=FALSE}
 # plot Organic Weekly Agregate SPEND by DEPARTMENT
-library(latticeExtra)
 # --> construct separate plots for each series
 obj1 <- xyplot(SPEND_NFOOD ~ WEEK_NUM, organic_week_dep_spend, main="Organic Weekly Agregate SPEND by DEPARTMENT",type = "l" , lwd=2)
 obj2 <- xyplot(SPEND_FOOD ~ WEEK_NUM, organic_week_dep_spend, type = "l", lwd=2)
