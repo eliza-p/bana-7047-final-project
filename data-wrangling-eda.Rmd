@@ -8,6 +8,8 @@ library(tidyverse)
 library(lubridate)
 library(gridExtra) 
 library(modeest)
+library(knitr)
+library(kableExtra)
 ```
 ```{r set_wd_load_data, warning=FALSE, include=FALSE, message=FALSE}
 #Setting wd and loading data
@@ -167,25 +169,7 @@ The products data set has 151,141 observations and 5 variables which give inform
 ## Transactions Data Set
 The transactions data set has 10,625,553 observations and 9 variables which give detailed information about every transaction over a two year period. Both the households and products data sets can be linked to the transaction set by the 'HSHD_NUM' and 'PRODUCT_NUM' keys. Information such as the date of purchase, the amount spent and number of units purchased, and store region can be found in this data set. 
 
-Through data exploration, we found that 6,427 transactions had negative spend. We are assuming that these records account for returns, so we chose to filter them out of the data set for the rest of our analysis. The transaction data set now contains 10,619,064 records. 
-
-# Feature Engineering
-
-## Household Purchasing of Organic Products
-
-## Market Basket
-
-```{r}
-#to use later
-#res <- lapply( mydf , function(x) rbind( mean = mean(x) ,
- #                                 sd = sd(x) ,
-  #                                median = median(x) ,
-   #                               minimum = min(x) ,
-    #                              maximum = max(x) ,
-     #                             s.size = length(x) ) )
-```
-
-
+Through data exploration, we found that 6,427 transactions had negative spend and a negative unit or unit of 0. We are assuming that these records account for returns, so we chose to filter them out of the data set for the rest of our analysis. There are some transactions with negative spend but a postive unit count, we are assuming these transactions represent a customer reducing the price of an item through couponing or other discounts. The transaction data set now contains 10,619,064 records. 
 ```{r baskets, include=FALSE}
 #creating a data set with basket level detail - filter out returns
 mode <- function(x){
@@ -289,7 +273,7 @@ household_increase <- products %>%
 
 ```
 
-```{r}
+```{r include=FALSE, warning=FALSE}
 #save out created datasets to work with in future
 
 setwd(paths[Sys.info()[7]])
@@ -299,11 +283,6 @@ save(household_increase, file = "household_increase.Rdata", compress = FALSE)
 
 #should be able to use function "load(file = "organic_households.Rdata")" to load dataset when you need it in a different notebook
 ```
-
-```{r}
-summary(organic_households)
-```
-
 ## Proposed Work for the Rest of the Project
 
 #Predicting Organic Households
@@ -311,7 +290,7 @@ The goal for this part of the analysis is to come up with a classification model
 
 Looking at the summary of the data, 2,791 households have purchased an organic product (this is about 83% of the data set). Because a household will qualify as an "organic household" even if they've only purchased one organic product, this percentage is very high. After defining an initial model, we may introduce a different threshold for a household to be able to qualify as "organic." Some preliminary ideas are if a household purchases 25% or 50% more units of organic goods than non-organic goods, or if a household spends a certain amount of money on organic products. 
 
-```{r org household summary, include=TRUE}
+```{r org household summary, echo=FALSE}
 summary(organic_households)
 ```
 
@@ -361,9 +340,6 @@ org_spend2 <- plot(organic_households$TOTAL_UNITS_NORG~organic_households$TOTAL_
 legend(80, 350, pch=c(2,2), col=c("red", "blue"), c("Organic", "NonOrganic"), bty="o",  box.col="darkgreen", cex=.8)
 
 ```
-
-
-
 ## Organic Selling Seasonality Analysis 
 * Seasonality is common influnce factor in marketing. We are interested in detecting When/Where/How to conduct better organic marketing strategy. To that end, we use aggregated "SPEND" of organic selling data to detect possible seasonality patterns.
 * From aggregated "SPEND" time series plots, we can see sense some seasonality.
@@ -501,6 +477,23 @@ organic_week_spend <- merge(organic_week_spend,organic_week_loy_spend)
 organic_week_spend <- organic_week_spend%>%mutate(WEEK_NUM=as.factor(WEEK_NUM))
 organic_week_spend
 ```
+## Market Basket Analysis 
 
+In order to mine the transactions data for insights into what kind of organic products our customers purchase together, we will perform market basket analysis using the Apriori algorithm. Using data from both the transactions dataset and product dataset we have created a sparse matrix where rows represent a basket of products and the columns represent the types of items purchased. 
 
+The top 10 organic product categories are given in the table below.
+```{r message=FALSE, echo=FALSE}
+df <- as.data.frame(as.list(colSums(market_basket[ , 2:64])))
+select(df, -contains("NON.ORGANIC")) %>%
+  pivot_longer(1:21, names_to = "Product", values_to = "Baskets") %>% 
+  arrange(desc(Baskets)) %>% 
+  top_n(10) %>%
+  mutate(Product = str_replace_all(Product, "\\.", " ")) %>%
+  kable() %>%
+  kable_styling
+```
+# Works Cited
 
+Redman, Russell. "Organic Products Hit a Record-Breaking High." Supermarket News (May 20, 2019). https://search-proquest-com.proxy.libraries.uc.edu/docview/2238503079?accountid=2909.)
+
+Emarketer. "Consumer Connect Q4 2019: Channel Trends in CPG Today." https://chart-na1.emarketer.com/234160/attributes-us-internet-users-find-important-store-selection-process-by-generation-dec-2019-of-respondents-each-group
