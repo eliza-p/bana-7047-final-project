@@ -1,8 +1,10 @@
 ---
 title: "Data Wrangling & EDA"
 output:
-  word_document: default
+  html_document:
+    df_print: paged
   html_notebook: default
+  word_document: default
 ---
 ```{r libraries, warning=FALSE, include= FALSE}
 #load needed libraries
@@ -151,8 +153,14 @@ The households data set has 5000 observations, one for each household with a uni
 
 The majority of households fall between the ages of 35 and 74 and the distribution of age appears to be fairly normal with the exception of the very low number of households in the 19-24 range. This could be due to the fact that many younger shoppers still use their parent's loyalty card, so their data could show up under their parent's age. The vast majority of households are owners as opposed to renters and the majority of households also have a loyalty card. Income is slightly skewed right with fewer households making above $75,000. Many households in the data set are also comprised of only two adults, or two adults with one child. 
 
-```{r hh_grid_plots, echo=FALSE, fig.height=10, fig.width=8}
-grid.arrange(size, age, income, homeowner, marital, children, ncol = 2)
+```{r hh_grid_plot1, echo=FALSE, fig.height=3, fig.width=8}
+grid.arrange(size, age, ncol = 2)
+```
+```{r hh_grid_plot2, echo=FALSE, fig.height=3, fig.width=8}
+grid.arrange(income, homeowner, ncol = 2)
+```
+```{r hh_grid_plot3, echo=FALSE, fig.height=3, fig.width=8}
+grid.arrange(marital, children, ncol = 2)
 ```
 ```{r hh_loyalty_plot, echo=FALSE, fig.height=3, fig.width=5}
 loyalty
@@ -160,6 +168,7 @@ loyalty
 ```{r hh_comp_plot, echo=FALSE, fig.height=4, fig.width=8}
 comp
 ```
+
 ## Products Data Set
 The products data set has 151,141 observations and 5 variables which give information about the product. Each product has a unique 'PRODUCT_NUM' that links it to the transaction data set. Information such as the product department (food, non-food, or pharmacy), whether the product is a private or national brand, whether the product is organic, and the commodity of the product can be found in this data set. Product commidity is the most detailed information given about a given product so while we cannot pinpoint specific brands in this data set, we can see which categories of products are being bought organic. 
 
@@ -337,7 +346,9 @@ org_spend2 <- plot(organic_households$TOTAL_UNITS_NORG~organic_households$TOTAL_
 legend(80, 350, pch=c(2,2), col=c("red", "blue"), c("Organic", "NonOrganic"), bty="o",  box.col="darkgreen", cex=.8)
 
 ```
-## Organic Selling Seasonality Analysis 
+
+## Organic Selling Seasonality Analysis
+
 * Seasonality is common influnce factor in marketing. We are interested in detecting When/Where/How to conduct better organic marketing strategy. To that end, we use aggregated "SPEND" of organic selling data to detect possible seasonality patterns.
 * From aggregated "SPEND" time series plots, we can see sense some seasonality.
 * In order to find out more accurate seasonality insights, we plan to fit KNN/PAC/K-means/Hierarchical Clustering/Seasonal ARIMA models in to our aggregated "SPEND" time series data to help us detect more accurate seasonality patterns and forecast future trend.
