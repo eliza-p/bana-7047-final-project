@@ -1,0 +1,306 @@
+---
+title: "Final Project"
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  word_document: default
+---
+```{r libraries, warning=FALSE, include=FALSE}
+#load needed libraries
+library(tidyverse)
+library(lubridate)
+library(gridExtra) 
+library(modeest)
+library(knitr)
+library(kableExtra)
+library(latticeExtra)
+library(arules)
+library(arulesViz)
+```
+```{r, include=FALSE}
+#Setting wd and loading data
+#put the path of where you are storing the data on your computer
+paths = c('C:/Users/eliza/Documents/BANA 7047 - Data Mining II/Group Project/Data', 'C:/Users/ashle/Downloads/8451_The_Complete_Journey_2_Master (1)/The_Complete_Journey_2_Master', 'C:/Users/xiaoj/Desktop/BANA/BANA7047 Data Mining II/Project/8451_The_Complete_Journey_2_Master/The_Complete_Journey_2_Master')
+#use the code Sys.info()[7] to find out how your name is stored on your local machine, copy to this list
+names(paths) = c('eliza', 'ashle', 'xiaoj')
+#this will set the wd
+setwd(paths[Sys.info()[7]])
+
+load(file = "organic_households.Rdata")
+load(file = "market_basket.Rdata")
+load(file = "household_increase.Rdata")
+```
+# Introduction
+
+Understanding what drives customers to buy organic products is key as in many segments the market growth of organic products is outstripping that of the overall segment. Organic products also represent billions of dollars in sales and the availability of orgnic products is a key factor in why some consumers pick one grocery store over another.
+
+A recent report from the Organic Trade Association stated that the U.S. market for organic products was \$52.2 billion and accounted for 5.7% of all food sales in the United States in 2018. They reported that the majority of organic food sales were fruits and vegetables, accounting for $17.4 billion in sales; dairy and eggs made up the second-largest organic food category at \$6.5 billion in sales. Sales of organic fruits and vegetables grew by 5.6% which far surpassed the growth of the overall fruit and vegetable market at 1.7%. Non-food organic products saw 10.6% overall growth from 2017 to 2018 also surpassing the growth of the overall non-food segment at 3.6% (Redman). And recent polling by IRI, a consumer research company, found that 49% of Millennials and 40% of Gen X shoppers consider having a good selection of natural and organic foods important in selecting a grocery store (Emarketer). 
+
+For this project, we are acting as a team of analysts who are interested in identifying households that are likely to buy organic products so we know who to target for an organic product marketing campaign. In order to do this, we will use data at both the household and basket level and try classification models to accurately identify these households. We are also interested in organic trends over time and will use a classification model to attempt to flag households who have increased their spending on organic products in year two. Finally, we will use market basket analysis to mine for association rules to give insight on organic products frequently bought together. 
+
+## The Data
+
+The data set we are using for our project is called "The Complete Journey 2.0" and it is found on the 84.51 website (84.51). This data set has transactions at the household level from a group of 5,000 households over a two year period. This is a relational data set comprised of household data, transaction data, and product data that can be combined by household and product IDs. The household data set has demographic information such as the size, income, and age of the  household.The transaction data set is made up of over 10 billion rows; each row represents one item purchased by a customer and provides an ID for the item purchased, the household who purchased it, a 'Basket' ID which groups items purchased in the same transation, and information like the the date purchased and cost of the item. The product data set links to the transaction data set by the product ID and gives some high level information on each product including the product category, whether a product is organic, and whether the product is a private or national brand. 
+
+A graphical representation of the structure of our data set is displayed in Figure X.
+!["The Complete Journey 2.0" Data Structure](images/data_structure.png)
+
+## Major Findings
+
+#Predicting Organic Households
+The goal for this part of the analysis is to come up with a classification model that can help predict whether a household will buy organic products. For the remainder of the semester, logistic regression and classification tree models will be used to try and achieve this goal. An "organic household" subset of the original data sets was created with the dependent variable being "ORG_HOUSE" (1 if the household has purchased an organic product, 0 if not). This data set contains only complete observations and includes the demographic data from the households data set as well as the amount spent, total units purchased, and unique purcahsed for both organic and non-organic products. This data set has a total of 3,370 observations and 16 variables. 
+
+Looking at the summary of the data, 2,791 households have purchased an organic product (this is about 83% of the data set). Because a household will qualify as an "organic household" even if they've only purchased one organic product, this percentage is very high. After defining an initial model, we may introduce a different threshold for a household to be able to qualify as "organic." Some preliminary ideas are if a household purchases 25% or 50% more units of organic goods than non-organic goods, or if a household spends a certain amount of money on organic products. 
+
+```{r org household summary, echo=FALSE}
+summary(organic_households)
+```
+
+Through some preliminary data exploration, we see that both organic and non-organic households appear to be somewhat normally distributed by age ranges. There doesn't appear to be a clear demographic factor that organic households share, so this is something we will try to narrow down in our future analysis. 
+
+```{r org household age, echo=FALSE}
+
+counts<- table(organic_households$ORG_HOUSE, organic_households$AGE_RANGE)
+counts2<- table(organic_households$ORG_HOUSE, organic_households$INCOME_RANGE)
+counts3<- table(organic_households$ORG_HOUSE, organic_households$MARITAL)
+counts4<- table(organic_households$ORG_HOUSE, organic_households$HH_SIZE)
+
+
+org_age <- barplot(counts, main="Organic Households by Age Range",
+        xlab="Age Range", col=c("lightblue","lightgreen"),
+        legend = c("Not Organic", "Organic"), beside=TRUE)
+
+org_income <- barplot(counts2, main="Organic Households by Income Range",
+        xlab="Income Range", col=c("lightblue","lightgreen"),
+        legend = c("Not Organic", "Organic"), beside=FALSE)
+
+org_marital <- barplot(counts3, main="Organic Households by Marital Status",
+                      xlab="Marital Status", col=c("lightblue","lightgreen"),
+                      legend = c("Not Organic", "Organic"), beside=FALSE)
+
+org_size <- barplot(counts4, main="Organic Households by HH Size",
+                      xlab="HH Size", col=c("lightblue","lightgreen"),
+                      legend = c("Not Organic", "Organic"), beside=FALSE)
+
+par(mfrow=c(2,2))
+org_age
+org_income
+org_marital
+org_size
+
+```
+
+Additionally, when plotting the nonorganic spend with the nonorganic number of units purchased, there is a somewhat linear relationship, which is to be expected, but non-organic households (blue) tend to purchase fewer units and spend less on non-organic products than orgnaic households. Zooming in on this chart reveals that many non-organic households are clustered between $100 spend and 200 units. This means that organic households are not only purchasing organic products, but they are also purchasing more expensive and higher quantities of non-organic quantities than the non-organic households. 
+
+```{r nonorganic spend and units purchased, echo=FALSE}
+par(mfrow=c(1,2))
+
+org_spend1 <- plot(organic_households$TOTAL_UNITS_NORG~organic_households$TOTAL_SPEND_NORG, xlab="Total Units Non-Organic", ylab="Total Spend Non-Organic", xlim=c(0,50000), ylim=c(0,20000), main="NonOrganic Units vs Spend", pch=2, cex.main=1.5, frame.plot=FALSE, col=ifelse(organic_households$ORG_HOUSE==1,"red","blue"))
+legend(80, 15000, pch=c(2,2), col=c("red", "blue"), c("Organic", "NonOrganic"), bty="o",  box.col="darkgreen", cex=.8)
+
+org_spend2 <- plot(organic_households$TOTAL_UNITS_NORG~organic_households$TOTAL_SPEND_NORG, xlab="Total Units Non-Organic", ylab="Total Spend Non-Organic", xlim=c(0,1000), ylim=c(0,400), main="NonOrganic Units vs Spend", pch=2, cex.main=1.5, frame.plot=FALSE, col=ifelse(organic_households$ORG_HOUSE==1,"red","blue"))
+legend(80, 350, pch=c(2,2), col=c("red", "blue"), c("Organic", "NonOrganic"), bty="o",  box.col="darkgreen", cex=.8)
+
+```
+
+## Organic Selling Seasonality Analysis
+
+* Seasonality is common influnce factor in marketing. We are interested in detecting When/Where/How to conduct better organic marketing strategy. To that end, we use aggregated "SPEND" of organic selling data to detect possible seasonality patterns.
+* From aggregated "SPEND" time series plots, we can see sense some seasonality.
+* In order to find out more accurate seasonality insights, we plan to fit KNN/PAC/K-means/Hierarchical Clustering/Seasonal ARIMA models in to our aggregated "SPEND" time series data to help us detect more accurate seasonality patterns and forecast future trend.
+
+```{r org_merge, include=FALSE}
+# merge data by "HSHD_NUM" and "PRODUCT_NUM"
+merge_df <- merge(transactions,products,by="PRODUCT_NUM")
+merge_df <- merge(merge_df,households,by="HSHD_NUM")
+str(merge_df)
+```
+```{r org_int,include=FALSE}
+# set HSHD_NUM/PRODUCT_NUM /BASKET_NUM to interger variable
+merge_df[sapply(merge_df, is.character)] <- lapply(merge_df[sapply(merge_df, is.character)],as.integer)
+head(merge_df)
+```
+
+```{r yr_split,include=FALSE}
+# filter Organic transactions and split by YEAR
+organic <- merge_df%>%filter(ORGANIC=="Y")%>%mutate(WEEK_NUM=as.integer(WEEK_NUM),
+                                                    HSHD_NUM=as.factor(HSHD_NUM),
+                                                    PRODUCT_NUM=as.factor(PRODUCT_NUM),
+                                                    BASKET_NUM=as.factor(BASKET_NUM))
+organic_2016 <- organic%>%filter(YEAR=="2016")
+organic_2017 <- organic%>%filter(YEAR=="2017")
+summary(organic)
+# check "organic_2016" structure
+str(organic_2016)
+```
+```{r str2016,include=FALSE}
+# check range of "organic_2016$WEEK_NUM"
+summary(organic_2016$WEEK_NUM)
+```
+```{r fac2016week,include=FALSE}
+# set "organic_2016$WEEK_NUM" as factor
+organic_2016$WEEK_NUM <- as.factor(organic_2016$WEEK_NUM)
+```
+```{r week2017,include=FALSE}
+# check range of "organic_2017$WEEK_NUM"
+summary(organic_2017$WEEK_NUM)
+```
+```{r fac_week_2017,include=FALSE}
+# set "organic_2017$WEEK_NUM" as factor
+organic_2017$WEEK_NUM <- as.factor(organic_2017$WEEK_NUM)
+
+# reset organic_2017$WEEK_NUM level as 1:52
+levels(organic_2017$WEEK_NUM) <- seq(1,52,1)
+levels(organic_2017$WEEK_NUM)
+```
+```{r rbind_org, include=FALSE}
+# concatenate data
+organic_week <- rbind(organic_2016,organic_2017)
+summary(organic_week)
+```
+```{r org_week_spend_region,include=FALSE}
+# aggregate SPEND by week & region
+org_week_east_spend <- organic%>%filter(REGION=="EAST")%>%group_by(WEEK_NUM)%>%summarise(SPEND_E=sum(SPEND))
+org_week_south_spend <- organic%>%filter(REGION=="SOUTH")%>%group_by(WEEK_NUM)%>%summarise(SPEND_S=sum(SPEND))
+org_week_west_spend <- organic%>%filter(REGION=="WEST")%>%group_by(WEEK_NUM)%>%summarise(SPEND_W=sum(SPEND))
+org_week_central_spend <- organic%>%filter(REGION=="CENTRAL")%>%group_by(WEEK_NUM)%>%summarise(SPEND_C=sum(SPEND))
+organic_week_reg_spend <- merge(org_week_east_spend,org_week_south_spend,by="WEEK_NUM")
+organic_week_reg_spend <- merge(organic_week_reg_spend,org_week_west_spend,by="WEEK_NUM")
+organic_week_reg_spend <- merge(organic_week_reg_spend,org_week_central_spend,by="WEEK_NUM")
+organic_week_reg_spend
+```
+```{r week_reg_org_spend, echo=FALSE}
+# plot Organic Weekly Agregate SPEND by REGION
+ggplot(organic_week_reg_spend, aes(WEEK_NUM)) + 
+  geom_line(aes(y = SPEND_E, colour = "EAST")) + 
+  geom_line(aes(y = SPEND_S, colour = "SOUTH"))+
+  geom_line(aes(y = SPEND_W, colour = "WEST"))+
+  geom_line(aes(y = SPEND_C, colour = "CENTRAL"))+
+  theme(legend.position="bottom")+
+  ggtitle("Organic Weekly Agregate SPEND by REGION")+
+  ylab("Weekly Aggregated SPEND")
+```
+```{r organic_week_dep_spend, include=FALSE}
+# aggregate SPEND by week & DEPARTMENT
+org_week_nfood_spend <- organic%>%filter(DEPARTMENT=="NON-FOOD")%>%group_by(WEEK_NUM)%>%summarise(SPEND_NFOOD=sum(SPEND))
+org_week_food_spend <- organic%>%filter(DEPARTMENT=="FOOD")%>%group_by(WEEK_NUM)%>%summarise(SPEND_FOOD=sum(SPEND))
+org_week_phar_spend <- organic%>%filter(DEPARTMENT=="PHARMA")%>%group_by(WEEK_NUM)%>%summarise(SPEND_PHAR=sum(SPEND))
+org_week_phar_spend # PHARMA data is omited due to very limited records
+organic_week_dep_spend <- merge(org_week_nfood_spend,org_week_food_spend,by="WEEK_NUM")
+#organic_week_dep_spend <- merge(organic_week_dep_spend,org_week_phar_spend,by="WEEK_NUM")
+#organic_week_dep_spend <- organic_week_dep_spend%>%arrange(WEEK_NUM)
+
+organic_week_dep_spend
+```
+```{r plot_organic_week_dep_spend,echo=FALSE}
+# plot Organic Weekly Agregate SPEND by DEPARTMENT
+# --> construct separate plots for each series
+obj1 <- xyplot(SPEND_NFOOD ~ WEEK_NUM, organic_week_dep_spend, main="Organic Weekly Agregate SPEND by DEPARTMENT",type = "l" , lwd=2)
+obj2 <- xyplot(SPEND_FOOD ~ WEEK_NUM, organic_week_dep_spend, type = "l", lwd=2)
+# --> Make the plot with second y axis AND legend:
+doubleYScale(obj1, obj2, text = c("NON-FOOD", "FOOD") , add.ylab2 = TRUE)
+```
+```{r organic_week_brand_spend,include=FALSE}
+# aggregate SPEND by week & BRAND_TY
+org_week_pri_spend <- organic%>%filter(BRAND_TY=="PRIVATE" )%>%group_by(WEEK_NUM)%>%summarise(SPEND_PRI=sum(SPEND))
+org_week_nat_spend <- organic%>%filter(BRAND_TY=="NATIONAL")%>%group_by(WEEK_NUM)%>%summarise(SPEND_NAT=sum(SPEND))
+organic_week_brand_spend <- merge(org_week_pri_spend,org_week_nat_spend,by="WEEK_NUM")
+organic_week_brand_spend
+```
+```{r plot_organic_week_brand_spend,echo=FALSE}
+# plot Organic Weekly Agregate SPEND by BRAND_TY
+ggplot(organic_week_brand_spend, aes(WEEK_NUM)) + 
+  geom_line(aes(y = SPEND_PRI, colour = "PRIVATE")) + 
+  geom_line(aes(y = SPEND_NAT, colour = "NATIONAL")) +  
+  theme(legend.position="bottom")+
+  ggtitle("Organic Weekly Agregate SPEND by BRAND_TY")+
+  ylab("Weekly Aggregated SPEND")
+```
+```{r organic_week_loy_spend,include=FALSE}
+# aggregate SPEND by week & Loyaty
+org_week_loy_spend <- organic%>%filter(L=="Y" )%>%group_by(WEEK_NUM)%>%summarise(SPEND_LOY=sum(SPEND))
+org_week_nloy_spend <- organic%>%filter(L=="N")%>%group_by(WEEK_NUM)%>%summarise(SPEND_NLOY=sum(SPEND))
+organic_week_loy_spend <- merge(org_week_loy_spend,org_week_nloy_spend,by="WEEK_NUM")
+organic_week_loy_spend
+```
+```{r plot_organic_week_loy_spend,echo=FALSE}
+# plot Organic Weekly Agregate SPEND by LOYAL
+library(latticeExtra)
+# --> construct separate plots for each series
+obj1 <- xyplot(SPEND_NLOY ~ WEEK_NUM, organic_week_loy_spend, main="Organic Weekly Agregate SPEND by LOYAL",type = "l" , lwd=2)
+obj2 <- xyplot(SPEND_LOY ~ WEEK_NUM, organic_week_loy_spend, type = "l", lwd=2)
+# --> Make the plot with second y axis AND legend:
+doubleYScale(obj1, obj2, text = c("NON-LOYAL", "LOYAL") , add.ylab2 = TRUE)
+```
+```{r organic_week_spend,include=FALSE}
+# merge weekly SPEND data
+organic_week_spend <- merge(organic_week_reg_spend,organic_week_dep_spend)
+organic_week_spend <- merge(organic_week_spend,organic_week_brand_spend)
+organic_week_spend <- merge(organic_week_spend,organic_week_loy_spend)
+organic_week_spend <- organic_week_spend%>%mutate(WEEK_NUM=as.factor(WEEK_NUM))
+organic_week_spend
+```
+## Market Basket Analysis 
+
+In order to mine the transaction data for insights into what kinds of organic products our customers purchase together, we performed market basket analysis using the Apriori algorithm. 
+
+The top 10 organic product categories are given in the table below.
+```{r message=FALSE, echo=FALSE}
+df <- as.data.frame(as.list(colSums(market_basket[ , 2:64])))
+select(df, -contains("NON.ORGANIC")) %>%
+  pivot_longer(1:21, names_to = "Product", values_to = "Baskets") %>% 
+  arrange(desc(Baskets)) %>% 
+  top_n(10) %>%
+  mutate(Product = str_replace_all(Product, "\\.", " ")) %>%
+  kable() %>%
+  kable_styling
+```
+
+```{r market_basket_matrix, include=FALSE}
+#subset market_basket to only look at baskets with at least 1 organic item
+organic_market_basket <- market_basket %>%
+  filter_at(vars(starts_with("ORGANIC")), any_vars(. == 1))
+
+baskets <- as(as.matrix(organic_market_basket[, -1]), "transactions")
+summary(baskets)
+```
+```{r}
+itemFrequencyPlot(baskets, support = 0.1, cex.names = 0.6)
+```
+```{r}
+basket_rules <- apriori(baskets, parameter = list(sup = 0.01, conf = 0.8, target = "rules", maxlen = 3))
+```
+```{r}
+summary(basket_rules)
+```
+```{r}
+organic_names <- colnames(select(organic_market_basket, starts_with("ORGANIC")))
+organic_lhs <- subset(basket_rules, subset = lhs %in% organic_names & lift > 1.2)
+
+inspect(organic_lhs)
+```
+```{r}
+organic_only <- market_basket %>%
+  filter_at(vars(starts_with("ORGANIC")), any_vars(. == 1)) %>%
+  select(starts_with("ORGANIC"))
+
+organic_baskets <- as(as.matrix(organic_only[, -1]), "transactions")
+itemFrequencyPlot(organic_baskets, support = 0.01, cex.names = 0.7)
+```
+```{r}
+organic_basket_rules <- apriori(organic_baskets, parameter = list(sup = 0.001, conf = 0.6, target = "rules", maxlen = 5))
+summary(organic_basket_rules)
+```
+```{r}
+inspect(subset(organic_basket_rules, subset = lift > 2.8))
+```
+
+
+# Works Cited
+
+84.51. "The Complete Journey 2.0" Area 51 Source Files. https://www.8451.com/area51
+
+Redman, Russell. "Organic Products Hit a Record-Breaking High." Supermarket News (May 20, 2019). https://search-proquest-com.proxy.libraries.uc.edu/docview/2238503079?accountid=2909.)
+
+Emarketer. "Consumer Connect Q4 2019: Channel Trends in CPG Today." https://chart-na1.emarketer.com/234160/attributes-us-internet-users-find-important-store-selection-process-by-generation-dec-2019-of-respondents-each-group
