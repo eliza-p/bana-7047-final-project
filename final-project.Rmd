@@ -109,6 +109,7 @@ legend(80, 350, pch=c(2,2), col=c("red", "blue"), c("Organic", "NonOrganic"), bt
 * Seasonality is common influnce factor in marketing. We are interested in detecting When/Where/How to conduct better organic marketing strategy. To that end, we use aggregated "SPEND" of organic selling data to detect possible seasonality patterns.
 * From aggregated "SPEND" time series plots, we can see sense some seasonality.
 * In order to find out more accurate seasonality insights, we plan to fit KNN/PAC/K-means/Hierarchical Clustering/Seasonal ARIMA models in to our aggregated "SPEND" time series data to help us detect more accurate seasonality patterns and forecast future trend.
+* Test 
 
 ```{r org_merge, include=FALSE}
 # merge data by "HSHD_NUM" and "PRODUCT_NUM"
