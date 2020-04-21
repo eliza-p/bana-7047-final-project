@@ -104,6 +104,113 @@ legend(80, 350, pch=c(2,2), col=c("red", "blue"), c("Organic", "NonOrganic"), bt
 
 ```
 
+```{r logistic regression}
+#re-code organic households as ones that purchase at least 10% of their items organic
+organic_households <- products %>%
+  select(PRODUCT_NUM, ORGANIC) %>%
+  mutate(ORGANIC = str_replace(ORGANIC, "N", "NORG")) %>%
+  mutate(ORGANIC = str_replace(ORGANIC, "Y", "ORG")) %>% 
+  right_join(transactions, by = "PRODUCT_NUM") %>%
+  group_by(HSHD_NUM, ORGANIC) %>%
+  summarise(
+    TOTAL_SPEND = sum(SPEND),
+    TOTAL_UNITS = sum(UNITS),
+    UNIQUE_ITEMS = n_distinct(PRODUCT_NUM)) %>% 
+  ungroup() %>%
+  pivot_wider(names_from = ORGANIC, values_from = c(TOTAL_SPEND, TOTAL_UNITS, UNIQUE_ITEMS), values_fill = list(TOTAL_SPEND = 0, TOTAL_UNITS = 0, UNIQUE_ITEMS = 0)) %>%
+  left_join(households, by = "HSHD_NUM") %>%
+  mutate(ORG_HOUSE = ifelse((TOTAL_UNITS_ORG/(TOTAL_UNITS_ORG+TOTAL_UNITS_NORG)) > .10, 1, 0)) %>%
+  filter(complete.cases(.) == TRUE)
+
+#convert ORG_HOUSE to factor
+organic_households$ORG_HOUSE <- as.factor(organic_households$ORG_HOUSE)
+
+#see what percentage of data set is organic
+table(organic_households$ORG_HOUSE)
+#only about 9%
+
+#delete hshd number variable bc it is a unique id not used in analysis
+organic_households <- organic_households[,-1]
+
+#split data into training and testing sets
+set.seed(8817349)
+index <- sample(nrow(organic_households),nrow(organic_households)*0.70)
+org.train = organic_households[index,]
+org.test = organic_households[-index,]
+
+#train logistic regression model using demographic variables
+org.glm0<- glm(ORG_HOUSE~AGE_RANGE+MARITAL+INCOME_RANGE+HOMEOWNER+HH_SIZE+CHILDREN, family=binomial(link="logit"), data=org.train)
+summary(org.glm0)
+
+#criteria for model fitting
+org.glm0$deviance #1346.011
+AIC(org.glm0) #1384.011
+BIC(org.glm0) #1493.565
+```
+```{r in sample prediction, include=TRUE}
+#prediction
+#ROC curve for in sample data
+pred.glm0.train <- predict(org.glm0, type="response") 
+
+library(ROCR)
+pred <- prediction(pred.glm0.train, org.train$ORG_HOUSE) 
+perf <- performance(pred, "tpr", "fpr") 
+plot(perf, colorize=TRUE, main="In-Sample ROC") 
+
+#In Sample AUC
+unlist(slot(performance(pred, "auc"), "y.values")) 
+#0.6475069
+```
+```{r out of sample prediction, include=TRUE}
+#out of sample prediction
+pred.glm0.test<- predict(org.glm0, newdata = org.test, type="response") 
+
+#ROC curve
+pred <- prediction(pred.glm0.test, org.test$ORG_HOUSE) 
+perf <- performance(pred, "tpr", "fpr")
+plot(perf, colorize=TRUE, main="Out of Sample ROC")
+
+#Get the AUC
+unlist(slot(performance(pred, "auc"), "y.values"))
+#0.6126708
+
+
+#backwards selection w/ AIC
+org.glm.back <- step(org.glm0)
+summary(org.glm.back) #7 variables chosen, all significant
+org.glm.back$deviance #1358.652
+AIC(org.glm.back) #1374.652
+BIC(org.glm.back) #1420.78
+
+
+#in sample prediction
+#ROC curve in sample
+pred.back.train <- predict(org.glm.back, type="response") 
+
+library(ROCR)
+pred <- prediction(pred.back.train, org.train$ORG_HOUSE) 
+perf <- performance(pred, "tpr", "fpr") 
+plot(perf, colorize=TRUE, main="In-Sample ROC") 
+
+#In Sample AUC
+unlist(slot(performance(pred, "auc"), "y.values")) 
+#0.6314394
+
+#out of sample prediction
+pred.back.test<- predict(org.glm.back, newdata = org.test, type="response") 
+
+#ROC curve
+pred <- prediction(pred.back.test, org.test$ORG_HOUSE) 
+perf <- performance(pred, "tpr", "fpr")
+plot(perf, colorize=TRUE, main="Out of Sample ROC")
+
+#Get the AUC
+unlist(slot(performance(pred, "auc"), "y.values"))
+#0.6063656
+```
+
+
+
 ## Organic Selling Seasonality Analysis
 
 * Seasonality is common influnce factor in marketing. We are interested in detecting When/Where/How to conduct better organic marketing strategy. To that end, we use aggregated "SPEND" of organic selling data to detect possible seasonality patterns.
