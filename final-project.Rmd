@@ -49,62 +49,11 @@ A graphical representation of the structure of our data set is displayed in Figu
 ## Major Findings
 
 #Predicting Organic Households
-The goal for this part of the analysis is to come up with a classification model that can help predict whether a household will buy organic products. For the remainder of the semester, logistic regression and classification tree models will be used to try and achieve this goal. An "organic household" subset of the original data sets was created with the dependent variable being "ORG_HOUSE" (1 if the household has purchased an organic product, 0 if not). This data set contains only complete observations and includes the demographic data from the households data set as well as the amount spent, total units purchased, and unique purcahsed for both organic and non-organic products. This data set has a total of 3,370 observations and 16 variables. 
+The goal for this part of the analysis is to come up with a classification model that can help predict whether a household will buy organic products. An "organic household" subset of the original data sets was created with the dependent variable being "ORG_HOUSE" (1 if the household has purchased an organic product, 0 if not). This data set contains only complete observations and includes the demographic data from the households data set as well as the amount spent, total units purchased, and unique purcahsed for both organic and non-organic products. This data set has a total of 3,370 observations and 16 variables. 
 
-Looking at the summary of the data, 2,791 households have purchased an organic product (this is about 83% of the data set). Because a household will qualify as an "organic household" even if they've only purchased one organic product, this percentage is very high. After defining an initial model, we may introduce a different threshold for a household to be able to qualify as "organic." Some preliminary ideas are if a household purchases 25% or 50% more units of organic goods than non-organic goods, or if a household spends a certain amount of money on organic products. 
+Looking at the summary of the data, 2,791 households have purchased an organic product (this is about 83% of the data set). Because a household will qualify as an "organic household" even if they've only purchased one organic product, this percentage is very high. To make the model more realistic, this variable has been re-coded to qualify any household that purchases at least 10% of their total project organic. Using this method, only about 9% of the data set is considered an organic household, but these are the households we would most want to identify because the marketing promotions will be the most relevant to them.
 
-```{r org household summary, echo=FALSE}
-summary(organic_households)
-```
-
-Through some preliminary data exploration, we see that both organic and non-organic households appear to be somewhat normally distributed by age ranges. There doesn't appear to be a clear demographic factor that organic households share, so this is something we will try to narrow down in our future analysis. 
-
-```{r org household age, echo=FALSE}
-
-counts<- table(organic_households$ORG_HOUSE, organic_households$AGE_RANGE)
-counts2<- table(organic_households$ORG_HOUSE, organic_households$INCOME_RANGE)
-counts3<- table(organic_households$ORG_HOUSE, organic_households$MARITAL)
-counts4<- table(organic_households$ORG_HOUSE, organic_households$HH_SIZE)
-
-
-org_age <- barplot(counts, main="Organic Households by Age Range",
-        xlab="Age Range", col=c("lightblue","lightgreen"),
-        legend = c("Not Organic", "Organic"), beside=TRUE)
-
-org_income <- barplot(counts2, main="Organic Households by Income Range",
-        xlab="Income Range", col=c("lightblue","lightgreen"),
-        legend = c("Not Organic", "Organic"), beside=FALSE)
-
-org_marital <- barplot(counts3, main="Organic Households by Marital Status",
-                      xlab="Marital Status", col=c("lightblue","lightgreen"),
-                      legend = c("Not Organic", "Organic"), beside=FALSE)
-
-org_size <- barplot(counts4, main="Organic Households by HH Size",
-                      xlab="HH Size", col=c("lightblue","lightgreen"),
-                      legend = c("Not Organic", "Organic"), beside=FALSE)
-
-par(mfrow=c(2,2))
-org_age
-org_income
-org_marital
-org_size
-
-```
-
-Additionally, when plotting the nonorganic spend with the nonorganic number of units purchased, there is a somewhat linear relationship, which is to be expected, but non-organic households (blue) tend to purchase fewer units and spend less on non-organic products than orgnaic households. Zooming in on this chart reveals that many non-organic households are clustered between $100 spend and 200 units. This means that organic households are not only purchasing organic products, but they are also purchasing more expensive and higher quantities of non-organic quantities than the non-organic households. 
-
-```{r nonorganic spend and units purchased, echo=FALSE}
-par(mfrow=c(1,2))
-
-org_spend1 <- plot(organic_households$TOTAL_UNITS_NORG~organic_households$TOTAL_SPEND_NORG, xlab="Total Units Non-Organic", ylab="Total Spend Non-Organic", xlim=c(0,50000), ylim=c(0,20000), main="NonOrganic Units vs Spend", pch=2, cex.main=1.5, frame.plot=FALSE, col=ifelse(organic_households$ORG_HOUSE==1,"red","blue"))
-legend(80, 15000, pch=c(2,2), col=c("red", "blue"), c("Organic", "NonOrganic"), bty="o",  box.col="darkgreen", cex=.8)
-
-org_spend2 <- plot(organic_households$TOTAL_UNITS_NORG~organic_households$TOTAL_SPEND_NORG, xlab="Total Units Non-Organic", ylab="Total Spend Non-Organic", xlim=c(0,1000), ylim=c(0,400), main="NonOrganic Units vs Spend", pch=2, cex.main=1.5, frame.plot=FALSE, col=ifelse(organic_households$ORG_HOUSE==1,"red","blue"))
-legend(80, 350, pch=c(2,2), col=c("red", "blue"), c("Organic", "NonOrganic"), bty="o",  box.col="darkgreen", cex=.8)
-
-```
-
-```{r logistic regression}
+```{r re-code ORG_HOUSE}
 #re-code organic households as ones that purchase at least 10% of their items organic
 organic_households <- products %>%
   select(PRODUCT_NUM, ORGANIC) %>%
@@ -131,6 +80,34 @@ table(organic_households$ORG_HOUSE)
 
 #delete hshd number variable bc it is a unique id not used in analysis
 organic_households <- organic_households[,-1]
+```
+
+Through some initial EDA, we can see that households with higher incomes tend to purchase more organic products. It also appears that younger age ranges buy more organic products which makes sense, seeing as how buying organic is a sort of trend among younger generations. 
+
+```{r org household EDA, echo=FALSE}
+org.income <- ggplot(organic_households, aes(fill=ORG_HOUSE, y=nrow(organic_households), x=INCOME_RANGE)) + 
+    geom_bar(position="fill", stat="identity")
+
+org.age <- ggplot(organic_households, aes(fill=ORG_HOUSE, y=nrow(organic_households), x=AGE_RANGE)) + 
+    geom_bar(position="fill", stat="identity")
+
+org.marital <- ggplot(organic_households, aes(fill=ORG_HOUSE, y=nrow(organic_households), x=MARITAL)) + 
+    geom_bar(position="fill", stat="identity")
+
+org.kids <- ggplot(organic_households, aes(fill=ORG_HOUSE, y=nrow(organic_households), x=CHILDREN)) + 
+    geom_bar(position="fill", stat="identity")
+
+
+par(mfrow=c(2,2))
+org.income
+org.age
+
+```
+
+The first method used in trying to classify organic households is logistic regression. The data set was split into 70% training and 30% testing sets and an initial model was run with ORG_HOUSE as the dependent variable and relevant demographic variables as predictors: age range, income range, marital status, homeowner status, household size, and number of children. Income ranges 100-150k and 150k+ are the most significnat variables from this output. The AIC of this initial model is 1384.011 and the BIC is 1493.565. The in-sample and out-of-sample ROC curve can be seen below. The in-sample AUC is 0.6475069 and the out-of-sample AUC is 0.6126708 meaning that this model is doing better than randomly guessing at classifying organic households, but there is still room for improvement. 
+
+
+```{r logistic regression initial model}
 
 #split data into training and testing sets
 set.seed(8817349)
@@ -173,8 +150,11 @@ plot(perf, colorize=TRUE, main="Out of Sample ROC")
 #Get the AUC
 unlist(slot(performance(pred, "auc"), "y.values"))
 #0.6126708
+```
 
+Backwards selection was used to narrow down the number of variables used in the model. Now there are 7 predictors chosen and all are significant (maritalSingle, income 35-49k, income50-74k, income 75-99k, income 100-150k, income 150k+, and children). The AIC of this reduced model is 1374.652 and the BIC is 1420.78. The in-sample and out-of-sample AUC's are 0.6314394 and 0.6063656 respectively. Although the AUC is slightly lower than the initial model, this model performs similarly while being less complex.
 
+```{r backwards selection, include=TRUE}
 #backwards selection w/ AIC
 org.glm.back <- step(org.glm0)
 summary(org.glm.back) #7 variables chosen, all significant
@@ -208,6 +188,7 @@ plot(perf, colorize=TRUE, main="Out of Sample ROC")
 unlist(slot(performance(pred, "auc"), "y.values"))
 #0.6063656
 ```
+
 
 
 
