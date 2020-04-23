@@ -154,7 +154,7 @@ unlist(slot(performance(pred, "auc"), "y.values"))
 
 Backwards selection was used to narrow down the number of variables used in the model. Now there are 7 predictors chosen and all are significant (maritalSingle, income 35-49k, income50-74k, income 75-99k, income 100-150k, income 150k+, and children). The AIC of this reduced model is 1374.652 and the BIC is 1420.78. The in-sample and out-of-sample AUC's are 0.6314394 and 0.6063656 respectively. Although the AUC is slightly lower than the initial model, this model performs similarly while being less complex.
 
-```{r backwards selection, include=TRUE}
+```{r backwards selection}
 #backwards selection w/ AIC
 org.glm.back <- step(org.glm0)
 summary(org.glm.back) #7 variables chosen, all significant
@@ -162,7 +162,8 @@ org.glm.back$deviance #1358.652
 AIC(org.glm.back) #1374.652
 BIC(org.glm.back) #1420.78
 
-
+```
+```{r backwards roc, include=TRUE}
 #in sample prediction
 #ROC curve in sample
 pred.back.train <- predict(org.glm.back, type="response") 
@@ -175,6 +176,7 @@ plot(perf, colorize=TRUE, main="In-Sample ROC")
 #In Sample AUC
 unlist(slot(performance(pred, "auc"), "y.values")) 
 #0.6314394
+
 
 #out of sample prediction
 pred.back.test<- predict(org.glm.back, newdata = org.test, type="response") 
@@ -189,8 +191,181 @@ unlist(slot(performance(pred, "auc"), "y.values"))
 #0.6063656
 ```
 
+Next a model was run including demographic predictors as well as the total spent on non-organic products and a cost function was introduced to try and find the optimal cutoff probability. We are assuming that it is 20 times worse to missclassify a true organic household as non-organic than to misclassify a non-organic household as organic. The reasoning behind this is because sending a coupon to a household that is not organic could influence them to try an organic product, however not sending a coupon to an organic household could cause this household to shop at a competitor for which they have a coupon. Using this cost function and the grid search method, the optimal cutoff probability for this problem is 0.05. The misclassification rate with this model is 0.7219161 but the false negative is low at 0.0531401.
+
+```{r logistic regression optimal cutoff}
+#define cost function
+costfunc = function(obs, pred.p, pcut){
+  weight1 = 20   
+  weight0 = 1    
+  c1 = (obs==1)&(pred.p<pcut)    
+  c0 = (obs==0)&(pred.p>=pcut)   
+  cost = mean(weight1*c1 + weight0*c0)  
+  return(cost) 
+}
+
+#define sequence 
+p.seq = seq(0.01, 1, 0.01) 
+p.seq
+
+#find optimal pcut
+cost = rep(0, length(p.seq)) 
+
+for(i in 1:length(p.seq)){ 
+  cost[i] = costfunc(obs = org.train$ORG_HOUSE, pred.p = pred.glm0.train, pcut = p.seq[i])   
+} 
+
+```
+```{r opt cutoff plot, include=TRUE}
+#plot the cutoffs
+plot(p.seq, cost)
+
+```
+```{r opt cutoff metrics}
+
+# find the optimal pcut
+optimal.pcut.glm0 = p.seq[which(cost==min(cost))]
+optimal.pcut.glm0  #0.05
+
+#use the optimal cutoff probability to calculate performance 
+#binary classification
+class.glm0.train.opt<- (pred.glm0.train>optimal.pcut.glm0)*1
+# confusion matrix
+table(org.train$ORG_HOUSE, class.glm0.train.opt, dnn = c("True", "Predicted"))
+
+#get metrics
+MR<- mean(org.train$ORG_HOUSE!= class.glm0.train.opt) #0.7219161
+FPR<- sum(org.train$ORG_HOUSE==0 & class.glm0.train.opt==1)/sum(org.train$ORG_HOUSE==0) #0.7862454
+FNR<- sum(org.train$ORG_HOUSE==1 & class.glm0.train.opt==0)/sum(org.train$ORG_HOUSE==1) # 0.0531401
+cost<- costfunc(obs = org.train$ORG_HOUSE, pred.p = pred.glm0.train, pcut = optimal.pcut.glm0)  #0.8105129 
 
 
+
+```
+
+A classification tree was also used to try and predict organic households using the demographic predictors as well as the total amount spent on non-organic products. If we assume symmetric costs, the model barely classifies any organic households so we add in the same 20:1 cost function that was used in the logistic model. 
+
+```{r simple classification tree, include=TRUE}
+#symmetric costs
+library(rpart.plot)
+org.rpart0 <- rpart(formula = ORG_HOUSE ~TOTAL_SPEND_NORG+L+AGE_RANGE+MARITAL+INCOME_RANGE+HOMEOWNER+HH_SIZE+CHILDREN, data = org.train, method = "class", control=rpart.control(minsplit=3, minbucket=3, cp=.003))
+prp(org.rpart0, extra=1)
+
+
+```
+```{r symmetric cf}
+#look at confusion matrix for symmetric cost
+pred0<- predict(org.rpart0, type="class") 
+table(org.train$ORG_HOUSE, pred0, dnn = c("True", "Pred"))
+
+
+
+```
+
+With the cost function, the model is much better at identifying organic households however out of caution, there is a high false positive rate. This is not the worst thing given the nature of this problem, but it means that coupons are getting sent to households that probably are not that interested in organic products. Using the cost function with prediction, the in sample cost is 0.7342094 and the out of sample cost is 1.136499.
+
+```{r simple classification tree: cost, include=TRUE}
+
+#specifies a loss matrix
+org.rpart <- rpart(formula = ORG_HOUSE ~ TOTAL_SPEND_NORG+L+AGE_RANGE+MARITAL+INCOME_RANGE+HOMEOWNER+HH_SIZE+CHILDREN, data = org.train, method = "class", parms = list(loss=matrix(c(0,20,1,0), nrow = 2))) #cost for FN is 20 and FP is 1
+prp(org.rpart, extra=1)
+
+```
+```{r cost cf}
+#confusion matrix with cost function
+pred<- predict(org.rpart, type="class")
+table(org.train$ORG_HOUSE, pred, dnn = c("True", "Pred"))
+
+
+
+#prediction using cost function model
+#get confusion matrix again: in sample
+org.train.pred.tree1<- predict(org.rpart, org.train, type="class")
+table(org.train$ORG_HOUSE, org.train.pred.tree1, dnn=c("Truth","Predicted"))
+
+#out of sample prediction
+org.test.pred.tree1<- predict(org.rpart, org.test, type="class")
+table(org.test$ORG_HOUSE, org.test.pred.tree1, dnn=c("Truth","Predicted"))
+
+
+#we can get expected cost for this tree model by defining a cost function with the correct weights
+cost <- function(r, pi){
+  weight1 = 20
+  weight0 = 1
+  c1 = (r==1)&(pi==0) #logical vector - true if actual 1 but predict 0
+  c0 = (r==0)&(pi==1) #logical vector - true if actual 0 but predict 1
+  return(mean(weight1*c1+weight0*c0))
+}
+
+cost(org.train$ORG_HOUSE,org.train.pred.tree1) #0.7342094, in sample cost
+
+cost(org.test$ORG_HOUSE,org.test.pred.tree1) #1.136499, out of sample cost
+
+
+
+```
+
+Next random forest was used to obtain a more advanced tree model. Using the 20:1 cost function, the optimal cutoff probability was found to be 0.01. Additionally, the in sample AUC for this model is 0.5489546 which is only slightly better than randomly guessing. The out of sample misclassification rate using the random forest model with the optimal cutoff is 0.5964392, the false positive rate is 0.6292257 and the false negative rate is 0.2765957. This model is basically only getting half of its classifications right, and out of caution, is classifying many non-organic households as being organic. 
+
+```{r advanced trees}
+#random forest 
+library(randomForest)
+org.rf <- randomForest(ORG_HOUSE~TOTAL_SPEND_NORG+L+AGE_RANGE+MARITAL+INCOME_RANGE+HOMEOWNER+HH_SIZE+CHILDREN, data = org.train)
+org.rf
+
+
+#use type=prob to get predicted probability and then find the optimal cutoff
+#do in-sample prediction and find optimal cutoff
+org.rf.pred<- predict(org.rf, type = "prob")[,2]
+costfunc = function(obs, pred.p, pcut){
+  weight1 = 20   # define the weight for "true=1 but pred=0" (FN)
+  weight0 = 1    # define the weight for "true=0 but pred=1" (FP)
+  c1 = (obs==1)&(pred.p<pcut)    # count for "true=1 but pred=0"   (FN)
+  c0 = (obs==0)&(pred.p>=pcut)   # count for "true=0 but pred=1"   (FP)
+  cost = mean(weight1*c1 + weight0*c0)  # misclassification with weight
+  return(cost) # you have to return to a value when you write R functions
+} 
+p.seq = seq(0.01, 0.5, 0.01)
+cost = rep(0, length(p.seq))  
+for(i in 1:length(p.seq)){ 
+  cost[i] = costfunc(obs = org.train$ORG_HOUSE, pred.p = org.rf.pred, pcut = p.seq[i])  
+}
+```
+```{r rf cutoff plot, include=TRUE}
+plot(p.seq, cost)
+
+```
+```{r rf ROC, include=TRUE}
+#ROC curve 
+library(ROCR)
+pred <- prediction(org.rf.pred, org.train$ORG_HOUSE)
+perf <- performance(pred, "tpr", "fpr")
+plot(perf, colorize=TRUE)
+
+```
+```{r rf metrics}
+#Get the AUC
+unlist(slot(performance(pred, "auc"), "y.values")) #0.5489546
+
+#confusion matrix based on optimal cutoff probability
+## out-of-sample
+optimal.pcut= p.seq[which(cost==min(cost))] #0.01
+org.rf.pred.test<- predict(org.rf, newdata=org.test, type = "prob")[,2]
+org.rf.class.test<- (org.rf.pred.test>optimal.pcut)*1
+
+
+table(org.test$ORG_HOUSE, org.rf.class.test, dnn = c("True", "Pred"))
+
+#get metrics optimal prob rf model out of sample
+MR<- mean(org.test$ORG_HOUSE!= org.rf.class.test) #0.5964392
+FPR<- sum(org.test$ORG_HOUSE==0 & org.rf.class.test==1)/sum(org.test$ORG_HOUSE==0) # 0.6292257
+FNR<- sum(org.test$ORG_HOUSE==1 & org.rf.class.test==0)/sum(org.test$ORG_HOUSE==1) # 0.2765957
+
+
+```
+
+#Conclusion
+None of these models are doing an exceptional job at identifying households given the current predictor variables. This indicates that perhaps demographic information is not adequate enough information to identify who is likely to buy organic products. In every model, income and age seem to be the most significant predictors for an organic household. Therefore given more detailed product information on what brands households are buying combined with age and income might result in a better classification model. 
 
 ## Organic Selling Seasonality Analysis
 
