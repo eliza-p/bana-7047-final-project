@@ -46,16 +46,18 @@ For this project, we are acting as a team of analysts who are interested in iden
 The data set we are using for our project is called "The Complete Journey 2.0" and it is found on the 84.51 website (84.51). This data set has transactions at the household level from a group of 5,000 households over a two year period. This is a relational data set comprised of household data, transaction data, and product data that can be combined by household and product IDs. The household data set has demographic information such as the size, income, and age of the  household.The transaction data set is made up of over 10 billion rows; each row represents one item purchased by a customer and provides an ID for the item purchased, the household who purchased it, a 'Basket' ID which groups items purchased in the same transation, and information like the the date purchased and cost of the item. The product data set links to the transaction data set by the product ID and gives some high level information on each product including the product category, whether a product is organic, and whether the product is a private or national brand. 
 
 A graphical representation of the structure of our data set is displayed in Figure X.
-!["The Complete Journey 2.0" Data Structure](images/data_structure.png)
+!["The Complete Journey 2.0" Data Structure](data_structure.png)
 
-## Major Findings
+
+
 
 #Predicting Organic Households
+
 The goal for this part of the analysis is to come up with a classification model that can help predict whether a household will buy organic products. An "organic household" subset of the original data sets was created with the dependent variable being "ORG_HOUSE" (1 if the household has purchased an organic product, 0 if not). This data set contains only complete observations and includes the demographic data from the households data set as well as the amount spent, total units purchased, and unique purcahsed for both organic and non-organic products. This data set has a total of 3,370 observations and 16 variables. 
 
 Looking at the summary of the data, 2,791 households have purchased an organic product (this is about 83% of the data set). Because a household will qualify as an "organic household" even if they've only purchased one organic product, this percentage is very high. To make the model more realistic, this variable has been re-coded to qualify any household that purchases at least 10% of their total project organic. Using this method, only about 9% of the data set is considered an organic household, but these are the households we would most want to identify because the marketing promotions will be the most relevant to them.
 
-```{r re-code ORG_HOUSE}
+```{r re-code, echo=FALSE}
 #convert ORG_HOUSE to factor
 organic_households$ORG_HOUSE <- as.factor(organic_households$ORG_HOUSE)
 
@@ -69,30 +71,28 @@ organic_households <- organic_households[,-1]
 
 Through some initial EDA, we can see that households with higher incomes tend to purchase more organic products. It also appears that younger age ranges buy more organic products which makes sense, seeing as how buying organic is a sort of trend among younger generations. 
 
-```{r org household EDA, echo=FALSE}
-org.income <- ggplot(organic_households, aes(fill=ORG_HOUSE, y=nrow(organic_households), x=INCOME_RANGE)) + 
-    geom_bar(position="fill", stat="identity")
+```{r org_household_EDA, echo=FALSE, fig_width = 4}
+organic_households %>% group_by(ORG_HOUSE, INCOME_RANGE) %>%
+  summarise(Count = n()) %>%
+  ggplot(aes(x = INCOME_RANGE, y = Count, fill = ORG_HOUSE)) +
+  geom_bar(stat = "identity", show.legend = FALSE, position = "dodge")  +
+  theme_classic() +
+  labs(title = "Household Income\nOrganic Households in Green", y = "", x = "") +
+  scale_fill_manual(values = c("#ED6D0D", "#7CC26A")) + 
+  theme(axis.text = element_text(size = 12, face = "bold"))
 
-org.age <- ggplot(organic_households, aes(fill=ORG_HOUSE, y=nrow(organic_households), x=AGE_RANGE)) + 
-    geom_bar(position="fill", stat="identity")
-
-org.marital <- ggplot(organic_households, aes(fill=ORG_HOUSE, y=nrow(organic_households), x=MARITAL)) + 
-    geom_bar(position="fill", stat="identity")
-
-org.kids <- ggplot(organic_households, aes(fill=ORG_HOUSE, y=nrow(organic_households), x=CHILDREN)) + 
-    geom_bar(position="fill", stat="identity")
-
-
-par(mfrow=c(2,2))
-org.income
-org.age
-
+organic_households %>% group_by(ORG_HOUSE, AGE_RANGE) %>%
+  summarise(Count = n()) %>%
+  ggplot(aes(x = AGE_RANGE, y = Count, fill = ORG_HOUSE)) +
+  geom_bar(stat = "identity", show.legend = FALSE, position = "dodge")  +
+  theme_classic() +
+  labs(title = "Household Age\nOrganic Households in Green", y = "", x = "") +
+  scale_fill_manual(values = c("#ED6D0D", "#7CC26A")) +
+  theme(axis.text = element_text(size = 12, face = "bold"))
 ```
 
 The first method used in trying to classify organic households is logistic regression. The data set was split into 70% training and 30% testing sets and an initial model was run with ORG_HOUSE as the dependent variable and relevant demographic variables as predictors: age range, income range, marital status, homeowner status, household size, and number of children. Income ranges 100-150k and 150k+ are the most significnat variables from this output. The AIC of this initial model is 1384.011 and the BIC is 1493.565. The in-sample and out-of-sample ROC curve can be seen below. The in-sample AUC is 0.6475069 and the out-of-sample AUC is 0.6126708 meaning that this model is doing better than randomly guessing at classifying organic households, but there is still room for improvement. 
-
-
-```{r logistic regression initial model}
+```{r logistic}
 
 #split data into training and testing sets
 set.seed(8817349)
@@ -109,7 +109,7 @@ org.glm0$deviance #1346.011
 AIC(org.glm0) #1384.011
 BIC(org.glm0) #1493.565
 ```
-```{r in sample prediction, include=TRUE}
+```{r in-sample, message=FALSE}
 #prediction
 #ROC curve for in sample data
 pred.glm0.train <- predict(org.glm0, type="response") 
@@ -139,7 +139,7 @@ unlist(slot(performance(pred, "auc"), "y.values"))
 
 Backwards selection was used to narrow down the number of variables used in the model. Now there are 7 predictors chosen and all are significant (maritalSingle, income 35-49k, income50-74k, income 75-99k, income 100-150k, income 150k+, and children). The AIC of this reduced model is 1374.652 and the BIC is 1420.78. The in-sample and out-of-sample AUC's are 0.6314394 and 0.6063656 respectively. Although the AUC is slightly lower than the initial model, this model performs similarly while being less complex.
 
-```{r backwards selection}
+```{r backwards}
 #backwards selection w/ AIC
 org.glm.back <- step(org.glm0)
 summary(org.glm.back) #7 variables chosen, all significant
@@ -148,7 +148,7 @@ AIC(org.glm.back) #1374.652
 BIC(org.glm.back) #1420.78
 
 ```
-```{r backwards roc, include=TRUE}
+```{r backwards_roc}
 #in sample prediction
 #ROC curve in sample
 pred.back.train <- predict(org.glm.back, type="response") 
@@ -178,7 +178,7 @@ unlist(slot(performance(pred, "auc"), "y.values"))
 
 Next a model was run including demographic predictors as well as the total spent on non-organic products and a cost function was introduced to try and find the optimal cutoff probability. We are assuming that it is 20 times worse to missclassify a true organic household as non-organic than to misclassify a non-organic household as organic. The reasoning behind this is because sending a coupon to a household that is not organic could influence them to try an organic product, however not sending a coupon to an organic household could cause this household to shop at a competitor for which they have a coupon. Using this cost function and the grid search method, the optimal cutoff probability for this problem is 0.05. The misclassification rate with this model is 0.7219161 but the false negative is low at 0.0531401.
 
-```{r logistic regression optimal cutoff}
+```{r logistic_optimal}
 #define cost function
 costfunc = function(obs, pred.p, pcut){
   weight1 = 20   
@@ -201,12 +201,12 @@ for(i in 1:length(p.seq)){
 } 
 
 ```
-```{r opt cutoff plot, include=TRUE}
+```{r opt cutoff plot, echo=FALSE}
 #plot the cutoffs
 plot(p.seq, cost)
 
 ```
-```{r opt cutoff metrics}
+```{r opt_cutoff_metrics}
 
 # find the optimal pcut
 optimal.pcut.glm0 = p.seq[which(cost==min(cost))]
@@ -223,45 +223,36 @@ MR<- mean(org.train$ORG_HOUSE!= class.glm0.train.opt) #0.7219161
 FPR<- sum(org.train$ORG_HOUSE==0 & class.glm0.train.opt==1)/sum(org.train$ORG_HOUSE==0) #0.7862454
 FNR<- sum(org.train$ORG_HOUSE==1 & class.glm0.train.opt==0)/sum(org.train$ORG_HOUSE==1) # 0.0531401
 cost<- costfunc(obs = org.train$ORG_HOUSE, pred.p = pred.glm0.train, pcut = optimal.pcut.glm0)  #0.8105129 
-
-
-
 ```
 
 A classification tree was also used to try and predict organic households using the demographic predictors as well as the total amount spent on non-organic products. If we assume symmetric costs, the model barely classifies any organic households so we add in the same 20:1 cost function that was used in the logistic model. 
 
-```{r simple classification tree, include=TRUE}
+```{r cart, echo=FALSE, message=FALSE}
 #symmetric costs
 library(rpart.plot)
 org.rpart0 <- rpart(formula = ORG_HOUSE ~TOTAL_SPEND_NORG+L+AGE_RANGE+MARITAL+INCOME_RANGE+HOMEOWNER+HH_SIZE+CHILDREN, data = org.train, method = "class", control=rpart.control(minsplit=3, minbucket=3, cp=.003))
 prp(org.rpart0, extra=1)
-
-
 ```
-```{r symmetric cf}
+```{r symmetric_cf}
 #look at confusion matrix for symmetric cost
 pred0<- predict(org.rpart0, type="class") 
 table(org.train$ORG_HOUSE, pred0, dnn = c("True", "Pred"))
-
-
 
 ```
 
 With the cost function, the model is much better at identifying organic households however out of caution, there is a high false positive rate. This is not the worst thing given the nature of this problem, but it means that coupons are getting sent to households that probably are not that interested in organic products. Using the cost function with prediction, the in sample cost is 0.7342094 and the out of sample cost is 1.136499.
 
-```{r simple classification tree: cost, include=TRUE}
+```{r cart_cost, echo=FALSE}
 
 #specifies a loss matrix
 org.rpart <- rpart(formula = ORG_HOUSE ~ TOTAL_SPEND_NORG+L+AGE_RANGE+MARITAL+INCOME_RANGE+HOMEOWNER+HH_SIZE+CHILDREN, data = org.train, method = "class", parms = list(loss=matrix(c(0,20,1,0), nrow = 2))) #cost for FN is 20 and FP is 1
 prp(org.rpart, extra=1)
 
 ```
-```{r cost cf}
+```{r cost_cf}
 #confusion matrix with cost function
 pred<- predict(org.rpart, type="class")
 table(org.train$ORG_HOUSE, pred, dnn = c("True", "Pred"))
-
-
 
 #prediction using cost function model
 #get confusion matrix again: in sample
@@ -285,14 +276,11 @@ cost <- function(r, pi){
 cost(org.train$ORG_HOUSE,org.train.pred.tree1) #0.7342094, in sample cost
 
 cost(org.test$ORG_HOUSE,org.test.pred.tree1) #1.136499, out of sample cost
-
-
-
 ```
 
 Next random forest was used to obtain a more advanced tree model. Using the 20:1 cost function, the optimal cutoff probability was found to be 0.01. Additionally, the in sample AUC for this model is 0.5489546 which is only slightly better than randomly guessing. The out of sample misclassification rate using the random forest model with the optimal cutoff is 0.5964392, the false positive rate is 0.6292257 and the false negative rate is 0.2765957. This model is basically only getting half of its classifications right, and out of caution, is classifying many non-organic households as being organic. 
 
-```{r advanced trees}
+```{r advanced_trees, message=FALSE, warning=FALSE}
 #random forest 
 library(randomForest)
 org.rf <- randomForest(ORG_HOUSE~TOTAL_SPEND_NORG+L+AGE_RANGE+MARITAL+INCOME_RANGE+HOMEOWNER+HH_SIZE+CHILDREN, data = org.train)
@@ -316,11 +304,10 @@ for(i in 1:length(p.seq)){
   cost[i] = costfunc(obs = org.train$ORG_HOUSE, pred.p = org.rf.pred, pcut = p.seq[i])  
 }
 ```
-```{r rf cutoff plot, include=TRUE}
+```{r rf cutoff plot, echo=FALSE}
 plot(p.seq, cost)
-
 ```
-```{r rf ROC, include=TRUE}
+```{r rf ROC, echo=FALSE}
 #ROC curve 
 library(ROCR)
 pred <- prediction(org.rf.pred, org.train$ORG_HOUSE)
@@ -328,7 +315,7 @@ perf <- performance(pred, "tpr", "fpr")
 plot(perf, colorize=TRUE)
 
 ```
-```{r rf metrics}
+```{r rf_metrics}
 #Get the AUC
 unlist(slot(performance(pred, "auc"), "y.values")) #0.5489546
 
@@ -352,366 +339,7 @@ FNR<- sum(org.test$ORG_HOUSE==1 & org.rf.class.test==0)/sum(org.test$ORG_HOUSE==
 #Conclusion
 None of these models are doing an exceptional job at identifying households given the current predictor variables. This indicates that perhaps demographic information is not adequate enough information to identify who is likely to buy organic products. In every model, income and age seem to be the most significant predictors for an organic household. Therefore given more detailed product information on what brands households are buying combined with age and income might result in a better classification model. 
 
-## Organic Selling Seasonality Analysis
-
-* Seasonality is common influnce factor in marketing. We are interested in detecting When/Where/How to conduct better organic marketing strategy. To that end, we use weekly organic "SPEND" data to detect possible seasonality patterns.
-* From organic "SPEND" time series plots, we can sense some seasonality.
-* In order to find out more accurate seasonality insights, we fit PAC/K-means/Hierarchical Clustering models into our weekly organic "SPEND" time series data to help us detect more accurate seasonality patterns and forecast future trend.
-
-
-```{r org_merge, include=FALSE}
-# merge data by "HSHD_NUM" and "PRODUCT_NUM"
-merge_df <- merge(transactions,products,by="PRODUCT_NUM")
-merge_df <- merge(merge_df,households,by="HSHD_NUM")
-str(merge_df)
-```
-```{r org_int,include=FALSE}
-# set HSHD_NUM/PRODUCT_NUM /BASKET_NUM to interger variable
-merge_df[sapply(merge_df, is.character)] <- lapply(merge_df[sapply(merge_df, is.character)],as.integer)
-head(merge_df)
-```
-
-```{r yr_split,include=FALSE}
-# filter Organic transactions and split by YEAR
-organic <- merge_df%>%filter(ORGANIC=="Y")%>%mutate(WEEK_NUM=as.integer(WEEK_NUM),
-                                                    HSHD_NUM=as.factor(HSHD_NUM),
-                                                    PRODUCT_NUM=as.factor(PRODUCT_NUM),
-                                                    BASKET_NUM=as.factor(BASKET_NUM))
-organic_2016 <- organic%>%filter(YEAR=="2016")
-organic_2017 <- organic%>%filter(YEAR=="2017")
-summary(organic)
-# check "organic_2016" structure
-str(organic_2016)
-```
-```{r str2016,include=FALSE}
-# check range of "organic_2016$WEEK_NUM"
-summary(organic_2016$WEEK_NUM)
-```
-```{r fac2016week,include=FALSE}
-# set "organic_2016$WEEK_NUM" as factor
-organic_2016$WEEK_NUM <- as.factor(organic_2016$WEEK_NUM)
-```
-```{r week2017,include=FALSE}
-# check range of "organic_2017$WEEK_NUM"
-summary(organic_2017$WEEK_NUM)
-```
-```{r fac_week_2017,include=FALSE}
-# set "organic_2017$WEEK_NUM" as factor
-organic_2017$WEEK_NUM <- as.factor(organic_2017$WEEK_NUM)
-
-# reset organic_2017$WEEK_NUM level as 1:52
-levels(organic_2017$WEEK_NUM) <- seq(1,52,1)
-levels(organic_2017$WEEK_NUM)
-```
-```{r rbind_org, include=FALSE}
-# concatenate data
-organic_week <- rbind(organic_2016,organic_2017)
-summary(organic_week)
-```
-```{r org_week_spend_region,include=FALSE}
-# aggregate SPEND by week & region
-org_week_east_spend <- organic%>%filter(REGION=="EAST")%>%group_by(WEEK_NUM)%>%summarise(SPEND_E=sum(SPEND))
-org_week_south_spend <- organic%>%filter(REGION=="SOUTH")%>%group_by(WEEK_NUM)%>%summarise(SPEND_S=sum(SPEND))
-org_week_west_spend <- organic%>%filter(REGION=="WEST")%>%group_by(WEEK_NUM)%>%summarise(SPEND_W=sum(SPEND))
-org_week_central_spend <- organic%>%filter(REGION=="CENTRAL")%>%group_by(WEEK_NUM)%>%summarise(SPEND_C=sum(SPEND))
-organic_week_reg_spend <- merge(org_week_east_spend,org_week_south_spend,by="WEEK_NUM")
-organic_week_reg_spend <- merge(organic_week_reg_spend,org_week_west_spend,by="WEEK_NUM")
-organic_week_reg_spend <- merge(organic_week_reg_spend,org_week_central_spend,by="WEEK_NUM")
-organic_week_reg_spend
-```
-```{r week_reg_org_spend, echo=FALSE}
-# plot Organic Weekly Agregate SPEND by REGION
-ggplot(organic_week_reg_spend, aes(WEEK_NUM)) + 
-  geom_line(aes(y = SPEND_E, colour = "EAST")) + 
-  geom_line(aes(y = SPEND_S, colour = "SOUTH"))+
-  geom_line(aes(y = SPEND_W, colour = "WEST"))+
-  geom_line(aes(y = SPEND_C, colour = "CENTRAL"))+
-  theme(legend.position="bottom")+
-  ggtitle("Organic Weekly Agregate SPEND by REGION")+
-  ylab("Weekly Aggregated SPEND")
-```
-```{r organic_week_dep_spend, include=FALSE}
-# aggregate SPEND by week & DEPARTMENT
-org_week_nfood_spend <- organic%>%filter(DEPARTMENT=="NON-FOOD")%>%group_by(WEEK_NUM)%>%summarise(SPEND_NFOOD=sum(SPEND))
-org_week_food_spend <- organic%>%filter(DEPARTMENT=="FOOD")%>%group_by(WEEK_NUM)%>%summarise(SPEND_FOOD=sum(SPEND))
-org_week_phar_spend <- organic%>%filter(DEPARTMENT=="PHARMA")%>%group_by(WEEK_NUM)%>%summarise(SPEND_PHAR=sum(SPEND))
-org_week_phar_spend # PHARMA data is omited due to very limited records
-organic_week_dep_spend <- merge(org_week_nfood_spend,org_week_food_spend,by="WEEK_NUM")
-#organic_week_dep_spend <- merge(organic_week_dep_spend,org_week_phar_spend,by="WEEK_NUM")
-#organic_week_dep_spend <- organic_week_dep_spend%>%arrange(WEEK_NUM)
-
-organic_week_dep_spend
-```
-```{r plot_organic_week_dep_spend,echo=FALSE}
-# plot Organic Weekly Agregate SPEND by DEPARTMENT
-# --> construct separate plots for each series
-obj1 <- xyplot(SPEND_NFOOD ~ WEEK_NUM, organic_week_dep_spend, main="Organic Weekly Agregate SPEND by DEPARTMENT",type = "l" , lwd=2)
-obj2 <- xyplot(SPEND_FOOD ~ WEEK_NUM, organic_week_dep_spend, type = "l", lwd=2)
-# --> Make the plot with second y axis AND legend:
-doubleYScale(obj1, obj2, text = c("NON-FOOD", "FOOD") , add.ylab2 = TRUE)
-```
-```{r organic_week_brand_spend,include=FALSE}
-# aggregate SPEND by week & BRAND_TY
-org_week_pri_spend <- organic%>%filter(BRAND_TY=="PRIVATE" )%>%group_by(WEEK_NUM)%>%summarise(SPEND_PRI=sum(SPEND))
-org_week_nat_spend <- organic%>%filter(BRAND_TY=="NATIONAL")%>%group_by(WEEK_NUM)%>%summarise(SPEND_NAT=sum(SPEND))
-organic_week_brand_spend <- merge(org_week_pri_spend,org_week_nat_spend,by="WEEK_NUM")
-organic_week_brand_spend
-```
-```{r plot_organic_week_brand_spend,echo=FALSE}
-# plot Organic Weekly Agregate SPEND by BRAND_TY
-ggplot(organic_week_brand_spend, aes(WEEK_NUM)) + 
-  geom_line(aes(y = SPEND_PRI, colour = "PRIVATE")) + 
-  geom_line(aes(y = SPEND_NAT, colour = "NATIONAL")) +  
-  theme(legend.position="bottom")+
-  ggtitle("Organic Weekly Agregate SPEND by BRAND_TY")+
-  ylab("Weekly Aggregated SPEND")
-```
-```{r organic_week_loy_spend,include=FALSE}
-# aggregate SPEND by week & Loyaty
-org_week_loy_spend <- organic%>%filter(L=="Y" )%>%group_by(WEEK_NUM)%>%summarise(SPEND_LOY=sum(SPEND))
-org_week_nloy_spend <- organic%>%filter(L=="N")%>%group_by(WEEK_NUM)%>%summarise(SPEND_NLOY=sum(SPEND))
-organic_week_loy_spend <- merge(org_week_loy_spend,org_week_nloy_spend,by="WEEK_NUM")
-organic_week_loy_spend
-```
-```{r plot_organic_week_loy_spend,echo=FALSE}
-# plot Organic Weekly Agregate SPEND by LOYAL
-library(latticeExtra)
-# --> construct separate plots for each series
-obj1 <- xyplot(SPEND_NLOY ~ WEEK_NUM, organic_week_loy_spend, main="Organic Weekly Agregate SPEND by LOYAL",type = "l" , lwd=2)
-obj2 <- xyplot(SPEND_LOY ~ WEEK_NUM, organic_week_loy_spend, type = "l", lwd=2)
-# --> Make the plot with second y axis AND legend:
-doubleYScale(obj1, obj2, text = c("NON-LOYAL", "LOYAL") , add.ylab2 = TRUE)
-```
-```{r organic_week_spend,include=FALSE}
-# merge weekly SPEND data
-organic_week_spend <- merge(organic_week_reg_spend,organic_week_dep_spend)
-organic_week_spend <- merge(organic_week_spend,organic_week_brand_spend)
-organic_week_spend <- merge(organic_week_spend,organic_week_loy_spend)
-organic_week_spend <- organic_week_spend%>%mutate(WEEK_NUM=as.factor(WEEK_NUM))
-head(organic_week_spend)
-str(organic_week_spend)
-summary(organic_week_spend)
-```
-```{r scaling, include=FALSE}
-# scaling data
-organic_week_spend_s <- scale(organic_week_spend[2:11])
-head(organic_week_spend_s)
-```
-
-## PCA Model
-* Scaling the data and fit PCA to explore group pattern and possible dimension reduction.
-* Frome Scree Plot, Pc1 explains 57.7% of variances and Pc2 explains 11.8% of variances. "Variables - PCA" plot shows "SPEND_NFOOD", "SPEND_C", "SPEND_NLOY" head to Pc1 significantly. Thus, reduced dimension which only contains those three variables is introduced for model selection.
-* "Individulas - PCA" plot indicates the data might be clustered into 3-4 clusters.
-
-```{r eigenvalues}
-set.seed(7047)
-# fit PCA
-library(factoextra)
-# Compute PCA
-res.pca <- prcomp(organic_week_spend_s, scale = TRUE)
-#Visualize eigenvalues (scree plot). Show the percentage of variances explained by each principal component.
-fviz_eig(res.pca)
-```
-```{r indPCA}
-#Graph of individuals. Individuals with a similar profile are grouped together.
-fviz_pca_ind(res.pca,
-             col.ind = "cos2", # Color by the quality of representation
-             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
-             repel = TRUE     # Avoid text overlapping
-             )
-```
-```{r VarPlotPCA}
-#Graph of variables. Positive correlated variables point to the same side of the plot. Negative correlated variables point to opposite sides of the graph.
-fviz_pca_var(res.pca,
-             col.var = "contrib", # Color by contributions to the PC
-             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
-             repel = TRUE     # Avoid text overlapping
-             )
-```
-```{r biplot,include=FALSE,echo=FALSE}
-#Biplot of individuals and variables
-fviz_pca_biplot(res.pca, repel = TRUE,
-                col.var = "#2E9FDF", # Variables color
-                col.ind = "#696969"  # Individuals color
-                )
-```
-```{r AccessPCA, include=FALSE}
-#Access to the PCA results
-library(factoextra)
-# Eigenvalues
-eig.val <- get_eigenvalue(res.pca)
-eig.val
-  
-# Results for Variables
-res.var <- get_pca_var(res.pca)
-res.var$coord          # Coordinates
-res.var$contrib        # Contributions to the PCs
-res.var$cos2           # Quality of representation 
-# Results for individuals
-res.ind <- get_pca_ind(res.pca)
-res.ind$coord          # Coordinates
-res.ind$contrib        # Contributions to the PCs
-res.ind$cos2           # Quality of representation 
-```
-
-## K-MEANS Model
-* Euclidean Distance is used.
-* Distance Plots indicates there might be three clusters. The dimension reduced data seems provide more clear clustering.
-* K-MEANS Plots for different k shows possible over-fitting for models with k>4.
-* Dimension Reduced Models reduced sum of square significantly.(See sum of square plot)
-* Combining all plots and clusters selection criterion, k=3 and dimension reduced model is selected, because this model provide more clear clustering plots, lower sum of square and acceptable Average Silhouette Coefficient and Dunn Index.
-
-```{r distanceplot}
-library(factoextra)
-organic_week_spend_s_c <- organic_week_spend_s[,c(4,5,10)]
-distance <- get_dist(organic_week_spend_s)
-distance_c <- get_dist(organic_week_spend_s_c)
-fviz_dist(distance, gradient = list(low = "#00AFBB", mid = "white", high = "#FC4E07"))+ggtitle("Distance Plot (Full Dimension)")
-fviz_dist(distance_c, gradient = list(low = "#00AFBB", mid = "white", high = "#FC4E07"))+ggtitle("Distance Plot (Reduced Dimension)")
-```
-```{r fitkmeans, include=FALSE}
-# fit kmeans models with different k
-k2 <- kmeans(organic_week_spend_s, centers = 2, nstart = 25)
-k3 <- kmeans(organic_week_spend_s, centers = 3, nstart = 25)
-k4 <- kmeans(organic_week_spend_s, centers = 4, nstart = 25)
-k5 <- kmeans(organic_week_spend_s, centers = 5, nstart = 25)
-k6 <- kmeans(organic_week_spend_s, centers = 6, nstart = 25)
-k7 <- kmeans(organic_week_spend_s, centers = 7, nstart = 25)
-
-k2_c <- kmeans(organic_week_spend_s_c, centers = 2, nstart = 25)
-k3_c <- kmeans(organic_week_spend_s_c, centers = 3, nstart = 25)
-k4_c <- kmeans(organic_week_spend_s_c, centers = 4, nstart = 25)
-k5_c <- kmeans(organic_week_spend_s_c, centers = 5, nstart = 25)
-k6_c <- kmeans(organic_week_spend_s_c, centers = 6, nstart = 25)
-k7_c <- kmeans(organic_week_spend_s_c, centers = 7, nstart = 25)
-
-
-# # store plots to compare
-library(factoextra)
-p2 <- fviz_cluster(k2, geom = "point", data = organic_week_spend_s) + ggtitle("k = 2 (full)")
-p3 <- fviz_cluster(k3, geom = "point", data = organic_week_spend_s) + ggtitle("k = 3(full)")
-p4 <- fviz_cluster(k4, geom = "point", data = organic_week_spend_s) + ggtitle("k = 4(full)")
-p5 <- fviz_cluster(k5, geom = "point", data = organic_week_spend_s) + ggtitle("k = 5(full)")
-p6 <- fviz_cluster(k6, geom = "point", data = organic_week_spend_s) + ggtitle("k = 6(full)")
-p7 <- fviz_cluster(k7, geom = "point", data = organic_week_spend_s) + ggtitle("k = 7(full)")
-
-
-p2_c <- fviz_cluster(k2_c, geom = "point", data = organic_week_spend_s_c) + ggtitle("k = 2 (reduced)")
-p3_c <- fviz_cluster(k3_c, geom = "point", data = organic_week_spend_s_c) + ggtitle("k = 3(reduced)")
-p4_c <- fviz_cluster(k4_c, geom = "point", data = organic_week_spend_s_c) + ggtitle("k = 4(reduced)")
-p5_c <- fviz_cluster(k5_c, geom = "point", data = organic_week_spend_s_c) + ggtitle("k = 5(reduced)")
-p6_c <- fviz_cluster(k6_c, geom = "point", data = organic_week_spend_s_c) + ggtitle("k = 6(reduced)")
-p7_c <- fviz_cluster(k7_c, geom = "point", data = organic_week_spend_s_c) + ggtitle("k = 7(reduced)")
-```
-
-```{r kmeanplot}
-library(gridExtra)
-grid.arrange(p2,p3,p4,p5,p6,p7, nrow = 3)
-grid.arrange(p2_c,p3_c,p4_c,p5_c,p6_c,p7_c, nrow = 3)
-```
-
-
-```{r sum_of_square_compare}
-# Determine number of clusters - simple within group sum of squares method is used.
-wss <- (nrow(organic_week_spend_s)-1)*sum(apply(organic_week_spend_s,2,var))
-for (i in 2:10) wss[i] <- sum(kmeans(organic_week_spend_s,
-                                     centers=i)$withinss)
-plot(1:10, wss, type="b", xlab="Number of Clusters",ylab="Within groups sum of squares",main ="sum of squares method (full)" )
-
-wss_c <- (nrow(organic_week_spend_s_c)-1)*sum(apply(organic_week_spend_s_c,2,var))
-for (i in 2:10) wss_c[i] <- sum(kmeans(organic_week_spend_s_c,
-                                     centers=i)$withinss)
-plot(1:10, wss_c, type="b", xlab="Number of Clusters",ylab="Within groups sum of squares",main ="sum of squares method(reduced)" )
-
-
-```
-```{r strength, include=FALSE}
-# Determine number of clusters - Prediction strength for estimating number of clusters
-library(fpc)
-prediction.strength(organic_week_spend_s, Gmin=2, Gmax=7, M=5,cutoff=0.8)
-prediction.strength(organic_week_spend_s_c, Gmin=2, Gmax=7, M=5,cutoff=0.8)
-```
-```{r Silhouette&dnn}
-# fpc package has cluster.stat() function that can calcuate other cluster validity measures such as Average Silhouette Coefficient (between -1 and 1, the higher the better), or Dunn index (betwen 0 and infinity, the higher the better): 
-d = dist(organic_week_spend_s, method = "euclidean")
-result = matrix(nrow = 14, ncol = 3)
-for (i in 2:10){
-  cluster_result = kmeans(organic_week_spend_s, i)
-  clusterstat=cluster.stats(d, cluster_result$cluster)
-  result[i-1,1]=i
-  result[i-1,2]=clusterstat$avg.silwidth
-  result[i-1,3]=clusterstat$dunn   
-}
-plot(result[,c(1,2)], type="l", ylab = 'silhouette width', xlab = 'number of clusters',main = "Average Silhouette Coefficient (full)")
-plot(result[,c(1,3)], type="l", ylab = 'dunn index', xlab = 'number of clusters',main = "Dunn index (full)")
-
-
-d_c = dist(organic_week_spend_s_c, method = "euclidean")
-result = matrix(nrow = 14, ncol = 3)
-for (i in 2:10){
-  cluster_result = kmeans(organic_week_spend_s_c, i)
-  clusterstat=cluster.stats(d_c, cluster_result$cluster)
-  result[i-1,1]=i
-  result[i-1,2]=clusterstat$avg.silwidth
-  result[i-1,3]=clusterstat$dunn   
-}
-plot(result[,c(1,2)], type="l", ylab = 'silhouette width', xlab = 'number of clusters',main = "Average Silhouette Coefficient (reduced)")
-plot(result[,c(1,3)], type="l", ylab = 'dunn index', xlab = 'number of clusters',main = "Dunn index (reduced)")
-
-```
-
-## Hierarchical Clustering
-* Hierarchical Clustering also show a clear group when using k=3 as cut-off and provide similary results as K-MEANS model does. So k=3 is validated as a good cluster for this data.
-```{r Hierarchical}
-#Wards Method or Hierarchical clustering
-#Calculate the distance matrix
-seed.dist=dist(organic_week_spend_s)
-#Obtain clusters using the Wards method
-seed.hclust=hclust(seed.dist, method="ward.D")
-plot(seed.hclust,main = "Cluster Dendrogram (full)")
-#Cut Dendrogram into 3 Clusters
-rect.hclust(seed.hclust, k=3)
-
-
-#Wards Method or Hierarchical clustering
-#Calculate the distance matrix
-seed.dist=dist(organic_week_spend_s_c)
-#Obtain clusters using the Wards method
-seed.hclust=hclust(seed.dist, method="ward.D")
-plot(seed.hclust,main = "Cluster Dendrogram (reduced)")
-#Cut Dendrogram into 3 Clusters
-rect.hclust(seed.hclust, k=3)
-```
-
-## Session Conclusion
-*Best weeks for marketing organic sell (week 53~104 converted back to 1~52 order for annual comparing):
-  - 1st Quarter(Winter time): 1  2  3  4  5  8  9 10 11 13 
-  - 2nd Quarter(Spring time): 14 15 17 18 20 24
-  - 3rd Quarter: 34 38 
-  - 4th Quarter(Holiday Season): 40 43 44 46 49 5
-* Supprise: Summer and early fall does not seem good for Organic Selling
-  - Possible Reason 1: many other produce and fruit source during Summer and aearly Fall
-  - Possible Reason 2: consumers have different purchasing behaviors during this seasons
-```{r}
-SPEND_KMEANS <- k3_c
-SPEND_KMEANS
-fviz_cluster(SPEND_KMEANS, data = organic_week_spend_s_c)+ggtitle("Organic Week Kmeans Final Model")
-```
-```{r include=FALSE}
-CLUSTER <- data.frame(WEEK_NUM=as.integer(organic_week_spend$WEEK_NUM),
-           CLUTSER_NUM=SPEND_KMEANS$cluster)
-
-CLUSTER <- CLUSTER%>%mutate(WEEK_SUB=if_else(WEEK_NUM>52,52，0))%>%mutate(WEEK=WEEK_NUM-WEEK_SUB)%>%filter(CLUTSER_NUM==2)
-
-unique(CLUSTER$WEEK) 
-```
-
-
-
-
-
-
-## Market Basket Analysis 
+# Market Basket Analysis 
 
 In order to mine the transaction data for insights into what kinds of organic products our customers frequently purchase together, we performed market basket analysis using the Apriori algorithm. Our data set gives each unique product an ID number and only provides very basic information like product category, whether the product is a national or private brand, and whether the product is organic or not; it does not give information on what exactly the product is. For instance we might have an item with a product category of 'Organic Produce', but no additional information on whether that item is an apple or a pear or something else. Because of this, we performed market basket analysis using the category of each item rather than the item ID in order to produce intelligible results. If the original baskets contained multiple items of the same product category this would only be counted as one item of that product category in our dataset. 
 
@@ -740,7 +368,7 @@ baskets <- as(as.matrix(organic_market_basket[, -1]), "transactions")
 summary(baskets)
 ```
 This took our total number of baskets down to `r nrow(organic_market_basket)`. But, even these baskets overwhelming contain products from non-organic product categories as seen in FIGURE X.
-```{r}
+```{r echo=FALSE, fig.width=3.5}
 df <- as.data.frame(as.list(colSums(organic_market_basket[ , 2:64]))) %>% 
   pivot_longer(1:63, names_to = "Product_Category", values_to = "Baskets") %>%
    mutate(Product_Category = str_replace_all(Product_Category, "\\.", " ")) %>%
@@ -748,8 +376,12 @@ df <- as.data.frame(as.list(colSums(organic_market_basket[ , 2:64]))) %>%
 
 df %>% group_by(Organic_Category) %>%
   summarise(Count = sum(Baskets)) %>%
-  ggplot(aes(x = Organic_Category, y = Count)) +
-  geom_bar(stat = "identity")
+  ggplot(aes(x = Organic_Category, y = Count, fill = Organic_Category)) +
+  geom_bar(stat = "identity", show.legend = FALSE)  +
+  theme_classic() +
+  labs(y = "Baskets With Product", x = "") +
+  scale_fill_manual(values = c("#ED6D0D", "#7CC26A")) +
+  theme(axis.text = element_text(size = 12, face = "bold"))
 ```
 
 This meant that we needed to set the support quite low when we mined for association rules. After some experimentation, a support of 0.01 appeared to generate rules involving organic products which still had a high confidence level. We also set the max length of our rules quite low at 4 since we were dealing with product categories rather than individual products. There is not a great deal of insight to be gained from associations between 10 categories other than knowing that the customer bought a lot of items that trip. Using these parameters we ran the apriori algorith on our data set and generated 13,235 rules. Of note, none of these rules contained organic products on the right hand side, likely because due to the very small number of organic products it would either be more likely to find any other itemset on the left-hand side alone than with the organic product category. However, we could subset these rules and only look at rules containing an organic product on the left hand side of the rule. The five association rules with the highest lift are shown in TABLE X. The first 4 rules all involve a customer buying organic produce and other non-organic products and then buying non-organic deli products. This suggests that it could be a good marketing strategy to offer coupons for organic deli products to these customers or run advertising that suggests pairing organic produce with organic deli, as it may not be a category people frequently think to purchase organic, especially since organic deli products are usually somewhat separat from the deli counter itself.
@@ -767,7 +399,7 @@ DATAFRAME(organic_lhs) %>%
   kable_styling() 
 ```
 The rule that showed up the most frequently was that a customer who purchased organic produce would also purchase non-organic produce in the same transaction. This could be a fruitful area to explore and look at exactly which vegetables and fruits customers frequently purchase organic versus which they frequently purchase non-organic varieties of. It might be an organic product is unavailable and the store should look to expand its offerings, or it might be greater price difference than other organic products. 
-```{r}
+```{r echo=FALSE}
 DATAFRAME(organic_lhs) %>%
   top_n(1, wt = count) %>%
   kable() %>%
@@ -776,28 +408,27 @@ DATAFRAME(organic_lhs) %>%
 
 Finally, in order to generate association rules that only involved organic product categories, we subset our orginial data set again and removed all columns involving non-organic products. This left us with baskets that only contained items from organic product categories. While these created baskets are not actually reflective of what the customer purchased, it does help our algorithm by scaling the confidence level so that it can focus on the relationships between purchases of items from different organic product categories. FIGURE X displays a bar plot of the most frequently purchased organic product categories.
 
-```{r}
+```{r echo=FALSE}
 organic_only <- market_basket %>%
   filter_at(vars(starts_with("ORGANIC")), any_vars(. == 1)) %>%
   select(starts_with("ORGANIC"))
 
 organic_baskets <- as(as.matrix(organic_only), "transactions")
-itemFrequencyPlot(organic_baskets, support = 0.01, cex.names = 0.7)
+itemFrequencyPlot(organic_baskets, support = 0.01, cex.names = 0.7, col = c("#7CC26A"))
 ```
-Using the Apriori algorithm, we again set the maxiumn length of the rule at 4 but had to drop the support to 0.001 as even in this data set a number of organic product categories only appear in baskets very infrequently. This generated 118 rules. The top 10 rules with the highest lift are displayed in TABLE X. 
+
+Using the Apriori algorithm, we again set the maxiumn length of the rule at 4 but had to drop the support to 0.001 as even in this data set a number of organic product categories only appear in baskets very infrequently. This generated 118 rules. The top 5 rules with the highest lift are displayed in TABLE X. 
 ```{r include = FALSE}
 organic_basket_rules <- apriori(organic_baskets, parameter = list(sup = 0.001, conf = 0.7, target = "rules", maxlen = 4))
 summary(organic_basket_rules)
 ```
-```{r}
+```{r echo=FALSE}
 DATAFRAME(organic_basket_rules) %>%
-  top_n(10, wt = lift) %>%
+  top_n(5, wt = lift) %>%
   arrange(desc(lift)) %>%
   kable() %>%
   kable_styling()
 ```
-
-
 # Works Cited
 
 84.51. "The Complete Journey 2.0" Area 51 Source Files. https://www.8451.com/area51
