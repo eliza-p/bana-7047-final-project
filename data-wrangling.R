@@ -126,7 +126,7 @@ organic_households <- products %>%
   ungroup() %>%
   pivot_wider(names_from = ORGANIC, values_from = c(TOTAL_SPEND, TOTAL_UNITS, UNIQUE_ITEMS), values_fill = list(TOTAL_SPEND = 0, TOTAL_UNITS = 0, UNIQUE_ITEMS = 0)) %>%
   left_join(households, by = "HSHD_NUM") %>%
-  mutate(ORG_HOUSE = ifelse(TOTAL_UNITS_ORG > 0, 1, 0)) %>%
+  mutate(ORG_HOUSE = ifelse((TOTAL_UNITS_ORG / (TOTAL_UNITS_ORG + TOTAL_UNITS_NORG)) > .10, 1, 0)) %>%
   filter(complete.cases(.) == TRUE)
 
 #creating a datset to target households who increased their purchasing of organic products between 2016 & 2017

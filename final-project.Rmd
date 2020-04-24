@@ -56,23 +56,6 @@ The goal for this part of the analysis is to come up with a classification model
 Looking at the summary of the data, 2,791 households have purchased an organic product (this is about 83% of the data set). Because a household will qualify as an "organic household" even if they've only purchased one organic product, this percentage is very high. To make the model more realistic, this variable has been re-coded to qualify any household that purchases at least 10% of their total project organic. Using this method, only about 9% of the data set is considered an organic household, but these are the households we would most want to identify because the marketing promotions will be the most relevant to them.
 
 ```{r re-code ORG_HOUSE}
-#re-code organic households as ones that purchase at least 10% of their items organic
-organic_households <- products %>%
-  select(PRODUCT_NUM, ORGANIC) %>%
-  mutate(ORGANIC = str_replace(ORGANIC, "N", "NORG")) %>%
-  mutate(ORGANIC = str_replace(ORGANIC, "Y", "ORG")) %>% 
-  right_join(transactions, by = "PRODUCT_NUM") %>%
-  group_by(HSHD_NUM, ORGANIC) %>%
-  summarise(
-    TOTAL_SPEND = sum(SPEND),
-    TOTAL_UNITS = sum(UNITS),
-    UNIQUE_ITEMS = n_distinct(PRODUCT_NUM)) %>% 
-  ungroup() %>%
-  pivot_wider(names_from = ORGANIC, values_from = c(TOTAL_SPEND, TOTAL_UNITS, UNIQUE_ITEMS), values_fill = list(TOTAL_SPEND = 0, TOTAL_UNITS = 0, UNIQUE_ITEMS = 0)) %>%
-  left_join(households, by = "HSHD_NUM") %>%
-  mutate(ORG_HOUSE = ifelse((TOTAL_UNITS_ORG/(TOTAL_UNITS_ORG+TOTAL_UNITS_NORG)) > .10, 1, 0)) %>%
-  filter(complete.cases(.) == TRUE)
-
 #convert ORG_HOUSE to factor
 organic_households$ORG_HOUSE <- as.factor(organic_households$ORG_HOUSE)
 
@@ -518,7 +501,7 @@ df <- as.data.frame(as.list(colSums(market_basket[ , 2:64]))) %>%
    mutate(Product_Category = str_replace_all(Product_Category, "\\.", " ")) %>%
   mutate(Organic_Category = ifelse(grepl("NON ORGANIC", Product_Category), "NON.ORGANIC", "ORGANIC"))
 ```
-```{r}
+```{r echo=FALSE}
 treemap(df, 
         index = c("Organic_Category", "Product_Category"), 
         vSize = "Baskets", 
