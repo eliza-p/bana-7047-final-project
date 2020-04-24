@@ -354,10 +354,10 @@ None of these models are doing an exceptional job at identifying households give
 
 ## Organic Selling Seasonality Analysis
 
-* Seasonality is common influnce factor in marketing. We are interested in detecting When/Where/How to conduct better organic marketing strategy. To that end, we use aggregated "SPEND" of organic selling data to detect possible seasonality patterns.
-* From aggregated "SPEND" time series plots, we can see sense some seasonality.
-* In order to find out more accurate seasonality insights, we plan to fit KNN/PAC/K-means/Hierarchical Clustering/Seasonal ARIMA models in to our aggregated "SPEND" time series data to help us detect more accurate seasonality patterns and forecast future trend.
-* Test 
+* Seasonality is common influnce factor in marketing. We are interested in detecting When/Where/How to conduct better organic marketing strategy. To that end, we use weekly organic "SPEND" data to detect possible seasonality patterns.
+* From organic "SPEND" time series plots, we can sense some seasonality.
+* In order to find out more accurate seasonality insights, we fit PAC/K-means/Hierarchical Clustering models into our weekly organic "SPEND" time series data to help us detect more accurate seasonality patterns and forecast future trend.
+
 
 ```{r org_merge, include=FALSE}
 # merge data by "HSHD_NUM" and "PRODUCT_NUM"
@@ -488,8 +488,229 @@ organic_week_spend <- merge(organic_week_reg_spend,organic_week_dep_spend)
 organic_week_spend <- merge(organic_week_spend,organic_week_brand_spend)
 organic_week_spend <- merge(organic_week_spend,organic_week_loy_spend)
 organic_week_spend <- organic_week_spend%>%mutate(WEEK_NUM=as.factor(WEEK_NUM))
-organic_week_spend
+head(organic_week_spend)
+str(organic_week_spend)
+summary(organic_week_spend)
 ```
+```{r scaling, include=FALSE}
+# scaling data
+organic_week_spend_s <- scale(organic_week_spend[2:11])
+head(organic_week_spend_s)
+```
+
+## PCA Model
+* Scaling the data and fit PCA to explore group pattern and possible dimension reduction.
+* Frome Scree Plot, Pc1 explains 57.7% of variances and Pc2 explains 11.8% of variances. "Variables - PCA" plot shows "SPEND_NFOOD", "SPEND_C", "SPEND_NLOY" head to Pc1 significantly. Thus, reduced dimension which only contains those three variables is introduced for model selection.
+* "Individulas - PCA" plot indicates the data might be clustered into 3-4 clusters.
+
+```{r eigenvalues}
+set.seed(7047)
+# fit PCA
+library(factoextra)
+# Compute PCA
+res.pca <- prcomp(organic_week_spend_s, scale = TRUE)
+#Visualize eigenvalues (scree plot). Show the percentage of variances explained by each principal component.
+fviz_eig(res.pca)
+```
+```{r indPCA}
+#Graph of individuals. Individuals with a similar profile are grouped together.
+fviz_pca_ind(res.pca,
+             col.ind = "cos2", # Color by the quality of representation
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+```
+```{r VarPlotPCA}
+#Graph of variables. Positive correlated variables point to the same side of the plot. Negative correlated variables point to opposite sides of the graph.
+fviz_pca_var(res.pca,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+```
+```{r biplot,include=FALSE,echo=FALSE}
+#Biplot of individuals and variables
+fviz_pca_biplot(res.pca, repel = TRUE,
+                col.var = "#2E9FDF", # Variables color
+                col.ind = "#696969"  # Individuals color
+                )
+```
+```{r AccessPCA, include=FALSE}
+#Access to the PCA results
+library(factoextra)
+# Eigenvalues
+eig.val <- get_eigenvalue(res.pca)
+eig.val
+  
+# Results for Variables
+res.var <- get_pca_var(res.pca)
+res.var$coord          # Coordinates
+res.var$contrib        # Contributions to the PCs
+res.var$cos2           # Quality of representation 
+# Results for individuals
+res.ind <- get_pca_ind(res.pca)
+res.ind$coord          # Coordinates
+res.ind$contrib        # Contributions to the PCs
+res.ind$cos2           # Quality of representation 
+```
+
+## K-MEANS Model
+* Euclidean Distance is used.
+* Distance Plots indicates there might be three clusters. The dimension reduced data seems provide more clear clustering.
+* K-MEANS Plots for different k shows possible over-fitting for models with k>4.
+* Dimension Reduced Models reduced sum of square significantly.(See sum of square plot)
+* Combining all plots and clusters selection criterion, k=3 and dimension reduced model is selected, because this model provide more clear clustering plots, lower sum of square and acceptable Average Silhouette Coefficient and Dunn Index.
+
+```{r distanceplot}
+library(factoextra)
+organic_week_spend_s_c <- organic_week_spend_s[,c(4,5,10)]
+distance <- get_dist(organic_week_spend_s)
+distance_c <- get_dist(organic_week_spend_s_c)
+fviz_dist(distance, gradient = list(low = "#00AFBB", mid = "white", high = "#FC4E07"))+ggtitle("Distance Plot (Full Dimension)")
+fviz_dist(distance_c, gradient = list(low = "#00AFBB", mid = "white", high = "#FC4E07"))+ggtitle("Distance Plot (Reduced Dimension)")
+```
+```{r fitkmeans, include=FALSE}
+# fit kmeans models with different k
+k2 <- kmeans(organic_week_spend_s, centers = 2, nstart = 25)
+k3 <- kmeans(organic_week_spend_s, centers = 3, nstart = 25)
+k4 <- kmeans(organic_week_spend_s, centers = 4, nstart = 25)
+k5 <- kmeans(organic_week_spend_s, centers = 5, nstart = 25)
+k6 <- kmeans(organic_week_spend_s, centers = 6, nstart = 25)
+k7 <- kmeans(organic_week_spend_s, centers = 7, nstart = 25)
+
+k2_c <- kmeans(organic_week_spend_s_c, centers = 2, nstart = 25)
+k3_c <- kmeans(organic_week_spend_s_c, centers = 3, nstart = 25)
+k4_c <- kmeans(organic_week_spend_s_c, centers = 4, nstart = 25)
+k5_c <- kmeans(organic_week_spend_s_c, centers = 5, nstart = 25)
+k6_c <- kmeans(organic_week_spend_s_c, centers = 6, nstart = 25)
+k7_c <- kmeans(organic_week_spend_s_c, centers = 7, nstart = 25)
+
+
+# # store plots to compare
+library(factoextra)
+p2 <- fviz_cluster(k2, geom = "point", data = organic_week_spend_s) + ggtitle("k = 2 (full)")
+p3 <- fviz_cluster(k3, geom = "point", data = organic_week_spend_s) + ggtitle("k = 3(full)")
+p4 <- fviz_cluster(k4, geom = "point", data = organic_week_spend_s) + ggtitle("k = 4(full)")
+p5 <- fviz_cluster(k5, geom = "point", data = organic_week_spend_s) + ggtitle("k = 5(full)")
+p6 <- fviz_cluster(k6, geom = "point", data = organic_week_spend_s) + ggtitle("k = 6(full)")
+p7 <- fviz_cluster(k7, geom = "point", data = organic_week_spend_s) + ggtitle("k = 7(full)")
+
+
+p2_c <- fviz_cluster(k2_c, geom = "point", data = organic_week_spend_s_c) + ggtitle("k = 2 (reduced)")
+p3_c <- fviz_cluster(k3_c, geom = "point", data = organic_week_spend_s_c) + ggtitle("k = 3(reduced)")
+p4_c <- fviz_cluster(k4_c, geom = "point", data = organic_week_spend_s_c) + ggtitle("k = 4(reduced)")
+p5_c <- fviz_cluster(k5_c, geom = "point", data = organic_week_spend_s_c) + ggtitle("k = 5(reduced)")
+p6_c <- fviz_cluster(k6_c, geom = "point", data = organic_week_spend_s_c) + ggtitle("k = 6(reduced)")
+p7_c <- fviz_cluster(k7_c, geom = "point", data = organic_week_spend_s_c) + ggtitle("k = 7(reduced)")
+```
+
+```{r kmeanplot}
+library(gridExtra)
+grid.arrange(p2,p3,p4,p5,p6,p7, nrow = 3)
+grid.arrange(p2_c,p3_c,p4_c,p5_c,p6_c,p7_c, nrow = 3)
+```
+
+
+```{r sum_of_square_compare}
+# Determine number of clusters - simple within group sum of squares method is used.
+wss <- (nrow(organic_week_spend_s)-1)*sum(apply(organic_week_spend_s,2,var))
+for (i in 2:10) wss[i] <- sum(kmeans(organic_week_spend_s,
+                                     centers=i)$withinss)
+plot(1:10, wss, type="b", xlab="Number of Clusters",ylab="Within groups sum of squares",main ="sum of squares method (full)" )
+
+wss_c <- (nrow(organic_week_spend_s_c)-1)*sum(apply(organic_week_spend_s_c,2,var))
+for (i in 2:10) wss_c[i] <- sum(kmeans(organic_week_spend_s_c,
+                                     centers=i)$withinss)
+plot(1:10, wss_c, type="b", xlab="Number of Clusters",ylab="Within groups sum of squares",main ="sum of squares method(reduced)" )
+
+
+```
+```{r strength, include=FALSE}
+# Determine number of clusters - Prediction strength for estimating number of clusters
+library(fpc)
+prediction.strength(organic_week_spend_s, Gmin=2, Gmax=7, M=5,cutoff=0.8)
+prediction.strength(organic_week_spend_s_c, Gmin=2, Gmax=7, M=5,cutoff=0.8)
+```
+```{r Silhouette&dnn}
+# fpc package has cluster.stat() function that can calcuate other cluster validity measures such as Average Silhouette Coefficient (between -1 and 1, the higher the better), or Dunn index (betwen 0 and infinity, the higher the better): 
+d = dist(organic_week_spend_s, method = "euclidean")
+result = matrix(nrow = 14, ncol = 3)
+for (i in 2:10){
+  cluster_result = kmeans(organic_week_spend_s, i)
+  clusterstat=cluster.stats(d, cluster_result$cluster)
+  result[i-1,1]=i
+  result[i-1,2]=clusterstat$avg.silwidth
+  result[i-1,3]=clusterstat$dunn   
+}
+plot(result[,c(1,2)], type="l", ylab = 'silhouette width', xlab = 'number of clusters',main = "Average Silhouette Coefficient (full)")
+plot(result[,c(1,3)], type="l", ylab = 'dunn index', xlab = 'number of clusters',main = "Dunn index (full)")
+
+
+d_c = dist(organic_week_spend_s_c, method = "euclidean")
+result = matrix(nrow = 14, ncol = 3)
+for (i in 2:10){
+  cluster_result = kmeans(organic_week_spend_s_c, i)
+  clusterstat=cluster.stats(d_c, cluster_result$cluster)
+  result[i-1,1]=i
+  result[i-1,2]=clusterstat$avg.silwidth
+  result[i-1,3]=clusterstat$dunn   
+}
+plot(result[,c(1,2)], type="l", ylab = 'silhouette width', xlab = 'number of clusters',main = "Average Silhouette Coefficient (reduced)")
+plot(result[,c(1,3)], type="l", ylab = 'dunn index', xlab = 'number of clusters',main = "Dunn index (reduced)")
+
+```
+
+## Hierarchical Clustering
+* Hierarchical Clustering also show a clear group when using k=3 as cut-off and provide similary results as K-MEANS model does. So k=3 is validated as a good cluster for this data.
+```{r Hierarchical}
+#Wards Method or Hierarchical clustering
+#Calculate the distance matrix
+seed.dist=dist(organic_week_spend_s)
+#Obtain clusters using the Wards method
+seed.hclust=hclust(seed.dist, method="ward.D")
+plot(seed.hclust,main = "Cluster Dendrogram (full)")
+#Cut Dendrogram into 3 Clusters
+rect.hclust(seed.hclust, k=3)
+
+
+#Wards Method or Hierarchical clustering
+#Calculate the distance matrix
+seed.dist=dist(organic_week_spend_s_c)
+#Obtain clusters using the Wards method
+seed.hclust=hclust(seed.dist, method="ward.D")
+plot(seed.hclust,main = "Cluster Dendrogram (reduced)")
+#Cut Dendrogram into 3 Clusters
+rect.hclust(seed.hclust, k=3)
+```
+
+## Session Conclusion
+*Best weeks for marketing organic sell (week 53~104 converted back to 1~52 order for annual comparing):
+  - 1st Quarter(Winter time): 1  2  3  4  5  8  9 10 11 13 
+  - 2nd Quarter(Spring time): 14 15 17 18 20 24
+  - 3rd Quarter: 34 38 
+  - 4th Quarter(Holiday Season): 40 43 44 46 49 5
+* Supprise: Summer and early fall does not seem good for Organic Selling
+  - Possible Reason 1: many other produce and fruit source during Summer and aearly Fall
+  - Possible Reason 2: consumers have different purchasing behaviors during this seasons
+```{r}
+SPEND_KMEANS <- k3_c
+SPEND_KMEANS
+fviz_cluster(SPEND_KMEANS, data = organic_week_spend_s_c)+ggtitle("Organic Week Kmeans Final Model")
+```
+```{r include=FALSE}
+CLUSTER <- data.frame(WEEK_NUM=as.integer(organic_week_spend$WEEK_NUM),
+           CLUTSER_NUM=SPEND_KMEANS$cluster)
+
+CLUSTER <- CLUSTER%>%mutate(WEEK_SUB=if_else(WEEK_NUM>52,52，0))%>%mutate(WEEK=WEEK_NUM-WEEK_SUB)%>%filter(CLUTSER_NUM==2)
+
+unique(CLUSTER$WEEK) 
+```
+
+
+
+
+
+
 ## Market Basket Analysis 
 
 In order to mine the transaction data for insights into what kinds of organic products our customers frequently purchase together, we performed market basket analysis using the Apriori algorithm. Our data set gives each unique product an ID number and only provides very basic information like product category, whether the product is a national or private brand, and whether the product is organic or not; it does not give information on what exactly the product is. For instance we might have an item with a product category of 'Organic Produce', but no additional information on whether that item is an apple or a pear or something else. Because of this, we performed market basket analysis using the category of each item rather than the item ID in order to produce intelligible results. If the original baskets contained multiple items of the same product category this would only be counted as one item of that product category in our dataset. 
