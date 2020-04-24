@@ -10,6 +10,7 @@ output:
 #load needed libraries
 library(tidyverse)
 library(lubridate)
+library(magrittr)
 library(gridExtra) 
 library(modeest)
 library(knitr)
@@ -17,6 +18,7 @@ library(kableExtra)
 library(latticeExtra)
 library(arules)
 library(arulesViz)
+library(treemap)
 ```
 ```{r, include=FALSE}
 #Setting wd and loading data
@@ -507,20 +509,24 @@ organic_week_spend
 ```
 ## Market Basket Analysis 
 
-In order to mine the transaction data for insights into what kinds of organic products our customers purchase together, we performed market basket analysis using the Apriori algorithm. 
+In order to mine the transaction data for insights into what kinds of organic products our customers frequently purchase together, we performed market basket analysis using the Apriori algorithm. Our data set gives each unique product an ID number and only provides very basic information like product category, whether the product is a national or private brand, and whether the product is organic or not; it does not give information on what exactly the product is. For instance we might have an item with a product category of 'Organic Produce', but no additional information on whether that item is an apple or a pear or something else. Because of this, we performed market basket analysis using the category of each item rather than the item ID in order to produce intelligible results. If the original baskets contained multiple items of the same product category this would only be counted as one item of that product category in our dataset. 
 
-The top 10 organic product categories are given in the table below.
-```{r message=FALSE, echo=FALSE}
-df <- as.data.frame(as.list(colSums(market_basket[ , 2:64])))
-select(df, -contains("NON.ORGANIC")) %>%
-  pivot_longer(1:21, names_to = "Product", values_to = "Baskets") %>% 
-  arrange(desc(Baskets)) %>% 
-  top_n(10) %>%
-  mutate(Product = str_replace_all(Product, "\\.", " ")) %>%
-  kable() %>%
-  kable_styling
+Our data set consited of `r nrow(market_basket)` baskets, each containing up to `r ncol(market_basket)` products. A treemap plot shown in FIGURE X can help us get an idea of which product categories show up in baskets most frequently. Non-organic product categories are represented by orange blocks and organic product categories are represented by green blocks.
+```{r message=FALSE, include=FALSE}
+df <- as.data.frame(as.list(colSums(market_basket[ , 2:64]))) %>% 
+  pivot_longer(1:63, names_to = "Product_Category", values_to = "Baskets") %>%
+   mutate(Product_Category = str_replace_all(Product_Category, "\\.", " ")) %>%
+  mutate(Organic_Category = ifelse(grepl("NON ORGANIC", Product_Category), "NON.ORGANIC", "ORGANIC"))
+```
+```{r}
+treemap(df, 
+        index = c("Organic_Category", "Product_Category"), 
+        vSize = "Baskets", 
+        type = "index",
+        palette = c("#ED6D0D", "#7CC26A"))
 ```
 
+As you can tell from the treemap plot, only a small number of baskets contain an item from an organic product category. The actual breakdown is that only `r as.numeric(select(filter(summarise(group_by(df, Organic_Category), count = sum(Baskets)), Organic_Category == "ORGANIC"), count))` of  `r as.numeric(select(filter(summarise(group_by(df, Organic_Category), count = sum(Baskets)), Organic_Category == "NON.ORGANIC"), count)) + as.numeric(select(filter(summarise(group_by(df, Organic_Category), count = sum(Baskets)), Organic_Category == "ORGANIC"), count))` baskets, or `r round((as.numeric(select(filter(summarise(group_by(df, Organic_Category), count = sum(Baskets)), Organic_Category == "ORGANIC"), count)))/ (as.numeric(select(filter(summarise(group_by(df, Organic_Category), count = sum(Baskets)), Organic_Category == "NON.ORGANIC"), count)) + as.numeric(select(filter(summarise(group_by(df, Organic_Category), count = sum(Baskets)), Organic_Category == "ORGANIC"), count))), 2)` percent, contain a product from an organic category. Since we are only interested in association rules that involve organic products we removed from our market basket analysis data set all baskets that did not contain at least one item from an organic product category.
 ```{r market_basket_matrix, include=FALSE}
 #subset market_basket to only look at baskets with at least 1 organic item
 organic_market_basket <- market_basket %>%
@@ -529,35 +535,62 @@ organic_market_basket <- market_basket %>%
 baskets <- as(as.matrix(organic_market_basket[, -1]), "transactions")
 summary(baskets)
 ```
+This took our total number of baskets down to `r nrow(organic_market_basket)`. But, even these baskets overwhelming contain products from non-organic product categories as seen in FIGURE X.
 ```{r}
-itemFrequencyPlot(baskets, support = 0.1, cex.names = 0.6)
+df <- as.data.frame(as.list(colSums(organic_market_basket[ , 2:64]))) %>% 
+  pivot_longer(1:63, names_to = "Product_Category", values_to = "Baskets") %>%
+   mutate(Product_Category = str_replace_all(Product_Category, "\\.", " ")) %>%
+  mutate(Organic_Category = ifelse(grepl("NON ORGANIC", Product_Category), "NON.ORGANIC", "ORGANIC"))
+
+df %>% group_by(Organic_Category) %>%
+  summarise(Count = sum(Baskets)) %>%
+  ggplot(aes(x = Organic_Category, y = Count)) +
+  geom_bar(stat = "identity")
 ```
-```{r}
-basket_rules <- apriori(baskets, parameter = list(sup = 0.01, conf = 0.8, target = "rules", maxlen = 3))
+
+This meant that we needed to set the support quite low when we mined for association rules. After some experimentation, a support of 0.01 appeared to generate rules involving organic products which still had a high confidence level. We also set the max length of our rules quite low at 4 since we were dealing with product categories rather than individual products. There is not a great deal of insight to be gained from associations between 10 categories other than knowing that the customer bought a lot of items that trip. Using these parameters we ran the apriori algorith on our data set and generated 13,235 rules. Of note, none of these rules contained organic products on the right hand side, likely because due to the very small number of organic products it would either be more likely to find any other itemset on the left-hand side alone than with the organic product category. However, we could subset these rules and only look at rules containing an organic product on the left hand side of the rule. The five association rules with the highest lift are shown in TABLE X. The first 4 rules all involve a customer buying organic produce and other non-organic products and then buying non-organic deli products. This suggests that it could be a good marketing strategy to offer coupons for organic deli products to these customers or run advertising that suggests pairing organic produce with organic deli, as it may not be a category people frequently think to purchase organic, especially since organic deli products are usually somewhat separat from the deli counter itself.
+```{r include=FALSE}
+basket_rules <- apriori(baskets, parameter = list(sup = 0.01, conf = 0.8, target = "rules", maxlen = 4))
 ```
-```{r}
-summary(basket_rules)
-```
-```{r}
+```{r echo=FALSE}
 organic_names <- colnames(select(organic_market_basket, starts_with("ORGANIC")))
 organic_lhs <- subset(basket_rules, subset = lhs %in% organic_names & lift > 1.2)
 
-inspect(organic_lhs)
+DATAFRAME(organic_lhs) %>%
+  top_n(5, wt = lift) %>%
+  arrange(desc(lift)) %>%
+  kable() %>%
+  kable_styling() 
 ```
+The rule that showed up the most frequently was that a customer who purchased organic produce would also purchase non-organic produce in the same transaction. This could be a fruitful area to explore and look at exactly which vegetables and fruits customers frequently purchase organic versus which they frequently purchase non-organic varieties of. It might be an organic product is unavailable and the store should look to expand its offerings, or it might be greater price difference than other organic products. 
+```{r}
+DATAFRAME(organic_lhs) %>%
+  top_n(1, wt = count) %>%
+  kable() %>%
+  kable_styling() 
+```
+
+Finally, in order to generate association rules that only involved organic product categories, we subset our orginial data set again and removed all columns involving non-organic products. This left us with baskets that only contained items from organic product categories. While these created baskets are not actually reflective of what the customer purchased, it does help our algorithm by scaling the confidence level so that it can focus on the relationships between purchases of items from different organic product categories. FIGURE X displays a bar plot of the most frequently purchased organic product categories.
+
 ```{r}
 organic_only <- market_basket %>%
   filter_at(vars(starts_with("ORGANIC")), any_vars(. == 1)) %>%
   select(starts_with("ORGANIC"))
 
-organic_baskets <- as(as.matrix(organic_only[, -1]), "transactions")
+organic_baskets <- as(as.matrix(organic_only), "transactions")
 itemFrequencyPlot(organic_baskets, support = 0.01, cex.names = 0.7)
 ```
-```{r}
-organic_basket_rules <- apriori(organic_baskets, parameter = list(sup = 0.001, conf = 0.6, target = "rules", maxlen = 5))
+Using the Apriori algorithm, we again set the maxiumn length of the rule at 4 but had to drop the support to 0.001 as even in this data set a number of organic product categories only appear in baskets very infrequently. This generated 118 rules. The top 10 rules with the highest lift are displayed in TABLE X. 
+```{r include = FALSE}
+organic_basket_rules <- apriori(organic_baskets, parameter = list(sup = 0.001, conf = 0.7, target = "rules", maxlen = 4))
 summary(organic_basket_rules)
 ```
 ```{r}
-inspect(subset(organic_basket_rules, subset = lift > 2.8))
+DATAFRAME(organic_basket_rules) %>%
+  top_n(10, wt = lift) %>%
+  arrange(desc(lift)) %>%
+  kable() %>%
+  kable_styling()
 ```
 
 
